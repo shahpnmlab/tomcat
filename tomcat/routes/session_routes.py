@@ -114,16 +114,12 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
             flash(f"Error creating new session: {str(e)}")
             return redirect(url_for('session.upload_file'))
 
-
     @session_bp.route('/process/<filename>', methods=['GET', 'POST'])
     def process_csv(filename):
         """
         Process and display the session data, handle form submissions,
         and manage the addition of new tomogram entries.
         """
-        # Store current filename in Flask session for settings redirect
-        flask_session['current_session'] = filename
-
         # Load the session
         session = session_manager.load_session(filename)
         if not session:
@@ -132,6 +128,8 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
 
         df = session.get_data()
         search_results = None
+        added_count = 0
+        skipped_count = 0
 
         # Handle POST request - form submission
         if request.method == 'POST':
@@ -157,6 +155,9 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
 
                     if not search_results:
                         flash(f"No tomograms found with basename '{search_basename}'")
+
+                    # Set search_results to simply the count for the template
+                    search_results = {'count': len(search_results)}
 
             # Check if the user is manually adding a new entry
             elif 'add_new_entry' in request.form:
@@ -219,12 +220,14 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
                     thumbnails[tomo_name] = thumbnail_path.split('/')[-1]
 
         return render_template('form.html',
-                            df=df,
-                            thumbnails=thumbnails,
-                            filename=filename,
-                            paths=config.paths,
-                            tomo_names_json=json.dumps(tomo_names),
-                            search_results=search_results)
+                               df=df,
+                               thumbnails=thumbnails,
+                               filename=filename,
+                               paths=config.paths,
+                               tomo_names_json=json.dumps(tomo_names),
+                               search_results=search_results,
+                               added_count=added_count,
+                               skipped_count=skipped_count)
 
 
     @session_bp.route('/detail/<filename>/<tomo_name>', methods=['GET', 'POST'])

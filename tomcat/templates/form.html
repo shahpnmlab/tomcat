@@ -83,42 +83,31 @@
                             </div>
                             <small class="text-muted">This will search configured directories for tomograms matching the basename.</small>
                         </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-end">
+                                {% if search_results and search_results.count > 0 %}
+                                <button type="submit" name="add_searched" value="1" class="btn btn-success">
+                                    Add Selected Tomograms
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
 
                     {% if search_results %}
                     <div class="mt-3">
-                        <h6>Search Results ({{ search_results|length }} found)</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Tomogram Name</th>
-                                        <th>File Type</th>
-                                        <th>Filename</th>
-                                        <th>Path</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for result in search_results %}
-                                    <tr>
-                                        <td>{{ result.name }}</td>
-                                        <td>
-                                            {% if result.type == 'tomogram' %}
-                                            <span class="badge bg-primary">tomogram</span>
-                                            {% elif result.type == 'tiltseries' %}
-                                            <span class="badge bg-info">tiltseries</span>
-                                            {% elif result.type == 'lowmag' %}
-                                            <span class="badge bg-secondary">lowmag</span>
-                                            {% else %}
-                                            <span class="badge bg-light text-dark">{{ result.type }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ result.filename }}</td>
-                                        <td><small class="text-muted">{{ result.path }}</small></td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                        <div class="alert alert-info">
+                            {% if search_results.count > 0 %}
+                                Found {{ search_results.count }} tomograms matching the search criteria.
+                                {% if added_count > 0 %}
+                                    Successfully added {{ added_count }} new tomogram{% if added_count > 1 %}s{% endif %}.
+                                {% endif %}
+                                {% if skipped_count > 0 %}
+                                    Skipped {{ skipped_count }} tomogram{% if skipped_count > 1 %}s{% endif %} that already exist.
+                                {% endif %}
+                            {% else %}
+                                No tomograms found matching the search criteria.
+                            {% endif %}
                         </div>
                     </div>
                     {% endif %}

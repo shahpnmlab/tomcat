@@ -160,12 +160,13 @@ class Session:
 
     def get_data(self):
         """
-        Get the session data as a pandas DataFrame.
+        Get the session data as a pandas DataFrame, sorted alphabetically by tomogram name.
 
         Returns:
-            pandas.DataFrame: Session data
+            pandas.DataFrame: Session data sorted by tomo_name
         """
-        return self._df
+        # Return a copy of the dataframe sorted by tomo_name in ascending order
+        return self._df.sort_values('tomo_name', ascending=True).reset_index(drop=True)
 
     def get_tomogram_data(self, tomo_name):
         """

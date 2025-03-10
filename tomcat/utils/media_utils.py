@@ -190,6 +190,7 @@ def get_traceback_str():
     exc_type, exc_value, exc_traceback = sys.exc_info()
     return ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
 
+
 def generate_jpeg_thumbnail(source_file, output_file, min_side=150):
     """
     Generate a JPEG thumbnail from an MRC file or other image file.
@@ -227,7 +228,7 @@ def generate_jpeg_thumbnail(source_file, output_file, min_side=150):
             file_type = "image"
             return _generate_thumbnail_from_image(source_file, output_file, min_side)
 
-        elif source_file.lower().endswith('.mrc'):
+        elif source_file.lower().endswith(('.mrc', '.rec', '.rec.mrc')):
             file_type = "mrc"
             # Validate the MRC file first
             validate_mrc_file(source_file)
