@@ -210,7 +210,7 @@ class FileLocator:
     def search_tomograms(self, basename):
         """
         Recursively search for tomograms in the configured directories
-        based on the provided basename.
+        based on the provided basename. Excludes lowmag files from search results.
 
         Args:
             basename (str): Base name to search for
@@ -221,11 +221,11 @@ class FileLocator:
         # Dictionary to hold results, keyed by basename to avoid duplicates
         results_dict = {}
 
-        # Search in all configured paths
+        # Search in tomogram and tiltseries paths only (exclude lowmag files)
         search_paths = [
             (self.config.paths['tomogram_path'], 'tomogram', self.EXTENSIONS['tomogram']),
             (self.config.paths['tiltseries_path'], 'tiltseries', self.EXTENSIONS['tiltseries']),
-            (self.config.paths['lowmag_path'], 'lowmag', self.EXTENSIONS['lowmag'])
+            # Lowmag path has been removed from search paths
         ]
 
         for path, file_type, extensions in search_paths:
