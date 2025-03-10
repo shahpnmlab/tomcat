@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ config.APP_NAME }} - Tomogram Details</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <style>
+        .image-container:hover {
+        height: auto;
+        min-height: 300px;
+        width: 100%;  /* Keep original width */
+        position: relative;
+        z-index: 100;
+        background-color: white;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+        .image-container {
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .image-container img, .image-container video {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            margin: 0 auto;
+            display: block;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+        .image-container:hover img, .image-container:hover video {
+            max-width: 100%;
+            max-height: none;  /* Allow full height */
+        }
+        .placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-align: center;
+            padding: 10px;
+        }
+        .notes-container {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .notes-textarea {
+            width: 100%;
+            min-height: 150px;
+            resize: vertical;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .metadata-table {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .metadata-table th {
+            width: 150px;
+            background-color: #f0f0f0;
+        }
+        .section-title {
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            color: #333;
+            font-weight: 500;
+        }
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        .image-label {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+    </style>
+    <script src="{{ url_for('static', filename='js/media_updater.js') }}"></script>
+</head>
+<body>
+    <div class="container mt-4 mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ tomo_name }} <small class="text-muted">Details</small></h1>
+            <div>
+                <a href="{{ url_for('process_csv', filename=filename) }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to List
+                </a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="alert alert-info">
+            {% for message in messages %}
+            {{ message }}
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Tomogram Information</h2>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered metadata-table">
+                    <tbody>
+                        <tr>
+                            <th>Name</th>
+                            <td>{{ tomo_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Thickness</th>
+                            <td>{{ tomo_data.thickness }}</td>
+                        </tr>
+                        <tr>
+                            <th>Score</th>
+                            <td>{{ tomo_data.score }}</td>
+                        </tr>
+                        <tr>
+                            <th>Status</th>
+                            <td>
+                                {% if tomo_data.delete %}
+                                <span class="badge bg-danger">Marked for Deletion</span>
+                                {% else %}
+                                <span class="badge bg-success">Active</span>
+                                {% endif %}
+
+                                {% if tomo_data.double_confirmed %}
+                                <span class="badge bg-primary">Double Confirmed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <h3 class="section-title">Tomogram Data</h3>
+        <div class="row">
+            <!-- Low Mag Overview Image -->
+            <div class="col-md-4">
+                <p class="image-label">Low Mag Overview</p>
+                <div class="image-container" id="lowmag-container">
+                    {% if lowmag_path %}
+                    <div class="loading-indicator" id="lowmag-loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="media-container" data-media-type="lowmag" data-tomo-name="{{ tomo_name }}">
+                        <div class="text-center">Loading low magnification image...</div>
+                    </div>
+                    {% else %}
+                    <div class="placeholder">
+                        <p>No low mag overview path configured</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Tilt Series Animation -->
+            <div class="col-md-4">
+                <p class="image-label">Tilt Series</p>
+                <div class="image-container" id="tiltseries-container">
+                    {% if tiltseries_path %}
+                    <div class="loading-indicator" id="tiltseries-loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="media-container" data-media-type="tiltseries" data-tomo-name="{{ tomo_name }}">
+                        <div class="text-center">Loading tilt series animation...</div>
+                    </div>
+                    {% else %}
+                    <div class="placeholder">
+                        <p>No tilt series path configured</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Tomogram Animation -->
+            <div class="col-md-4">
+                <p class="image-label">Tomogram</p>
+                <div class="image-container" id="tomogram-container">
+                    {% if tomogram_path %}
+                    <div class="loading-indicator" id="tomogram-loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="media-container" data-media-type="tomogram" data-tomo-name="{{ tomo_name }}">
+                        <div class="text-center">Loading tomogram animation...</div>
+                    </div>
+                    {% else %}
+                    <div class="placeholder">
+                        <p>No tomogram path configured</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <h3 class="section-title">Notes</h3>
+        <div class="notes-container">
+            <form method="POST" action="{{ url_for('detail_view', filename=filename, tomo_name=tomo_name) }}">
+                <div class="mb-3">
+                    <textarea class="form-control notes-textarea" name="notes" id="notes">{{ tomo_data.notes }}</textarea>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="delete" id="delete" {% if tomo_data.delete %}checked{% endif %}>
+                            <label class="form-check-label" for="delete">Mark for Deletion</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="double_confirmed" id="double_confirmed" {% if tomo_data.double_confirmed %}checked{% endif %}>
+                            <label class="form-check-label" for="double_confirmed">Double Confirmed</label>
+                        </div>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Manually check and hide loading indicators for already loaded images
+        function checkLoadedImages() {
+            // Check tilt series image
+            var tiltSeriesImg = document.querySelector('#tiltseries-container img');
+            if (tiltSeriesImg && tiltSeriesImg.complete) {
+                document.getElementById('tiltseries-loading').style.display = 'none';
+            }
+
+            // Check tomogram image
+            var tomogramImg = document.querySelector('#tomogram-container img');
+            if (tomogramImg && tomogramImg.complete) {
+                document.getElementById('tomogram-loading').style.display = 'none';
+            }
+
+            // Check lowmag image
+            var lowmagImg = document.querySelector('#lowmag-container img');
+            if (lowmagImg && lowmagImg.complete) {
+                document.getElementById('lowmag-loading').style.display = 'none';
+            }
+        }
+
+        // First check immediately
+        checkLoadedImages();
+
+        // Then check again after a delay to catch any images that loaded quickly
+        setTimeout(checkLoadedImages, 1000);
+    });
+
+    // Function to handle image loading errors
+    function handleImageError(img, loadingId, message) {
+        // Hide the loading spinner
+        document.getElementById(loadingId).style.display = 'none';
+
+        // Replace the img with a placeholder
+        const parent = img.parentNode;
+        const placeholder = document.createElement('div');
+        placeholder.className = 'placeholder';
+        placeholder.innerHTML = `<p>${message}</p>`;
+
+        // Add a small refresh button to try again
+        const refreshBtn = document.createElement('button');
+        refreshBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
+        refreshBtn.innerHTML = 'Refresh';
+        refreshBtn.onclick = function() {
+            location.reload();
+        };
+        placeholder.appendChild(refreshBtn);
+
+        // Remove the img and add the placeholder
+        parent.removeChild(img);
+        parent.appendChild(placeholder);
+    }
+
+    // Add direct onclick handlers to the loading spinners
+    document.addEventListener('DOMContentLoaded', function() {
+        var loadingElements = document.querySelectorAll('.loading-indicator');
+        loadingElements.forEach(function(el) {
+            el.onclick = function() {
+                this.style.display = 'none';
+            };
+        });
+    });
+
+    // Check media status and reload if necessary
+    function checkMediaStatus() {
+        const mediaTypes = ['lowmag', 'tiltseries', 'tomogram'];
+        const tomoName = '{{ tomo_name }}';
+
+        mediaTypes.forEach(type => {
+            fetch(`/media_status/${type}/${tomoName}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ready') {
+                        // Once ready, hide the loading spinner
+                        var loadingElement = document.getElementById(`${type}-loading`);
+                        if (loadingElement) {
+                            loadingElement.style.display = 'none';
+                        }
+
+                        // If we need to reload, do so
+                        if (data.reload) {
+                            const container = document.getElementById(`${type}-container`);
+                            if (container && container.querySelector('.placeholder')) {
+                                location.reload();
+                            }
+                        }
+                    }
+                })
+                .catch(error => console.error(`Error checking ${type} status:`, error));
+        });
+    }
+
+    // Check media status every 2 seconds
+    setInterval(checkMediaStatus, 2000);
+</script>
+</body>
+</html>

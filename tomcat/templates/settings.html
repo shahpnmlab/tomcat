@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ config.APP_NAME }} - Settings</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <style>
+        .file-browser {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .file-item {
+            padding: 5px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .file-item:hover {
+            background-color: #f5f5f5;
+        }
+        .directory {
+            font-weight: bold;
+            color: #0055aa;
+        }
+        .file {
+            color: #333;
+        }
+        .breadcrumb {
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+        .path-input {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>{{ config.APP_NAME }} Settings</h1>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="alert alert-info">
+            {% for message in messages %}
+            {{ message }}
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Configure Data Paths</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings') }}">
+                    <div class="mb-3">
+                        <label for="lowmag_path" class="form-label">Low-Mag Overviews Path:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="lowmag_path" name="lowmag_path"
+                                   value="{{ paths.lowmag_path }}">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="openFileBrowser('lowmag_path')">Browse</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tiltseries_path" class="form-label">Aligned Tilt-Series Path:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="tiltseries_path" name="tiltseries_path"
+                                   value="{{ paths.tiltseries_path }}">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="openFileBrowser('tiltseries_path')">Browse</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tomogram_path" class="form-label">Tomograms Path:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="tomogram_path" name="tomogram_path"
+                                   value="{{ paths.tomogram_path }}">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="openFileBrowser('tomogram_path')">Browse</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="notes_path" class="form-label">Notes Save Path:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="notes_path" name="notes_path"
+                                   value="{{ paths.notes_path }}">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="openFileBrowser('notes_path')">Browse</button>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-primary">Save Settings</button>
+                        <a href="{{ url_for('upload_file') }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Browser Modal -->
+    <div class="modal fade" id="fileBrowserModal" tabindex="-1" aria-labelledby="fileBrowserModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="fileBrowserModalLabel">Browse Directories</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="path-input">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="current_path" placeholder="Enter path...">
+                            <button class="btn btn-outline-secondary" type="button" id="go_to_path">Go</button>
+                        </div>
+                    </div>
+
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb" id="path_breadcrumb">
+                            <li class="breadcrumb-item"><a href="#" data-path="/">Root</a></li>
+                        </ol>
+                    </nav>
+
+                    <div class="file-browser" id="file_browser">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="select_path">Select This Directory</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let currentPath = '{{ paths.notes_path }}'; // Initialize with notes_path from server
+        let currentTarget = null;
+        const fileBrowserModal = new bootstrap.Modal(document.getElementById('fileBrowserModal'));
+
+        // Function to open the file browser modal
+        function openFileBrowser(targetId) {
+            currentTarget = targetId;
+
+            // Use the current value as starting path if it exists and is not empty
+            const inputElement = document.getElementById(targetId);
+            if (inputElement.value && inputElement.value.trim() !== '') {
+                currentPath = inputElement.value;
+            } else {
+                // Use a default path based on which field we're setting
+                if (targetId === 'notes_path') {
+                    currentPath = '{{ paths.notes_path }}';
+                } else if (targetId === 'lowmag_path') {
+                    currentPath = '{{ paths.lowmag_path }}' || '{{ paths.notes_path }}';
+                } else if (targetId === 'tiltseries_path') {
+                    currentPath = '{{ paths.tiltseries_path }}' || '{{ paths.notes_path }}';
+                } else if (targetId === 'tomogram_path') {
+                    currentPath = '{{ paths.tomogram_path }}' || '{{ paths.notes_path }}';
+                }
+            }
+
+            // Initialize the browser with current path
+            document.getElementById('current_path').value = currentPath;
+            browsePath(currentPath);
+
+            // Show the modal
+            fileBrowserModal.show();
+        }
+
+        // Function to browse a directory path
+        function browsePath(path) {
+            const browser = document.getElementById('file_browser');
+            browser.innerHTML = `<div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>`;
+
+            fetch('/browse_directory', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ path: path })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Failed to browse directory');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update current path
+                currentPath = data.current_path;
+                document.getElementById('current_path').value = currentPath;
+
+                // Update breadcrumb
+                updateBreadcrumb(currentPath);
+
+                // Clear the browser
+                browser.innerHTML = '';
+
+                // Add parent directory unless we're at root
+                if (data.parent_path !== currentPath) {
+                    const parentItem = document.createElement('div');
+                    parentItem.className = 'file-item directory';
+                    parentItem.innerHTML = '<i class="bi bi-arrow-up"></i> ..';
+                    parentItem.addEventListener('click', () => browsePath(data.parent_path));
+                    browser.appendChild(parentItem);
+                }
+
+                // Add all items
+                data.items.forEach(item => {
+                    const listItem = document.createElement('div');
+                    listItem.className = 'file-item ' + (item.is_directory ? 'directory' : 'file');
+
+                    if (item.is_directory) {
+                        listItem.innerHTML = `<i class="bi bi-folder"></i> ${item.name}/`;
+                        listItem.addEventListener('click', () => browsePath(item.path));
+                    } else {
+                        listItem.innerHTML = `<i class="bi bi-file"></i> ${item.name}`;
+                        // Files aren't selectable for these paths
+                    }
+
+                    browser.appendChild(listItem);
+                });
+
+                // If no items found
+                if (data.items.length === 0) {
+                    browser.innerHTML = '<div class="text-center text-muted">No items found</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Error browsing directory:', error);
+                browser.innerHTML = `<div class="alert alert-danger">
+                    Error browsing directory: ${error.message}
+                </div>`;
+
+                // If path is invalid, try to reset to a working path
+                if (path !== '{{ paths.notes_path }}' && path !== '{{ CURRENT_DIR }}') {
+                    setTimeout(() => {
+                        currentPath = '{{ paths.notes_path }}';
+                        document.getElementById('current_path').value = currentPath;
+                        browsePath(currentPath);
+                    }, 3000);
+                }
+            });
+        }
+
+        // Function to update the breadcrumb
+        function updateBreadcrumb(path) {
+            const breadcrumb = document.getElementById('path_breadcrumb');
+            breadcrumb.innerHTML = '';
+
+            // Split path into components
+            const pathParts = path.split('/').filter(Boolean);
+            let currentBuildPath = '/';
+
+            // Add root
+            const rootItem = document.createElement('li');
+            rootItem.className = 'breadcrumb-item';
+            const rootLink = document.createElement('a');
+            rootLink.href = '#';
+            rootLink.innerText = 'Root';
+            rootLink.dataset.path = '/';
+            rootLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                browsePath('/');
+            });
+            rootItem.appendChild(rootLink);
+            breadcrumb.appendChild(rootItem);
+
+            // Add each path part
+            pathParts.forEach((part, index) => {
+                currentBuildPath += part + '/';
+                const item = document.createElement('li');
+
+                if (index === pathParts.length - 1) {
+                    // Last item (current directory)
+                    item.className = 'breadcrumb-item active';
+                    item.innerText = part;
+                } else {
+                    // Parent directories
+                    item.className = 'breadcrumb-item';
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.innerText = part;
+                    link.dataset.path = currentBuildPath;
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        browsePath(e.target.dataset.path);
+                    });
+                    item.appendChild(link);
+                }
+
+                breadcrumb.appendChild(item);
+            });
+        }
+
+        // Initialize event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Go to path button
+            document.getElementById('go_to_path').addEventListener('click', function() {
+                const path = document.getElementById('current_path').value;
+                browsePath(path);
+            });
+
+            // Enter key in path input
+            document.getElementById('current_path').addEventListener('keyup', function(event) {
+                if (event.key === 'Enter') {
+                    const path = document.getElementById('current_path').value;
+                    browsePath(path);
+                }
+            });
+
+            // Select path button
+            document.getElementById('select_path').addEventListener('click', function() {
+                if (currentTarget) {
+                    document.getElementById(currentTarget).value = currentPath;
+                    fileBrowserModal.hide();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
