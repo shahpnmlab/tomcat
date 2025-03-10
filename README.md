@@ -1,6 +1,7 @@
 ![TomCat Screenshot](./assets/img.png)
 
 # TomCat - Tomography Catalogue Tool
+
 TomCat is a web-based tool for cataloging and managing tomography data, providing an easy way to view, annotate, and organize tomograms.
 
 ## Features

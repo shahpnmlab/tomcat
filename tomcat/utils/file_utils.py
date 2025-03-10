@@ -253,6 +253,5 @@ class FileLocator:
                                 'type': file_type,
                                 'filename': file
                             }
-
         # Convert dictionary to list for return
         return list(results_dict.values())
