@@ -7,6 +7,9 @@ including session creation, viewing, editing, and downloading.
 import json
 import os
 import logging
+import tarfile
+import tempfile
+from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory, session as flask_session
 from werkzeug.utils import secure_filename
 
@@ -130,11 +133,34 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
         search_results = None
         added_count = 0
         skipped_count = 0
+        search_notes = ""
+        filtered_df = df.copy()
 
         # Handle POST request - form submission
         if request.method == 'POST':
+            # Check if user is searching notes
+            if 'search_notes' in request.form:
+                search_notes = request.form.get('notes_query', '').strip().lower()
+                if search_notes:
+                    # Convert notes column to string first to handle non-string values
+                    filtered_df = df.copy()
+                    # Handle possible NaN or non-string values by converting to strings first
+                    filtered_df['notes_str'] = filtered_df['notes'].fillna('').astype(str)
+                    # Filter using the string column
+                    filtered_df = filtered_df[filtered_df['notes_str'].str.lower().str.contains(search_notes)]
+                    # Remove the temporary column
+                    filtered_df = filtered_df.drop(columns=['notes_str'])
+
+                    if len(filtered_df) == 0:
+                        flash(f"No tomograms found with notes containing '{search_notes}'")
+                    else:
+                        flash(f"Found {len(filtered_df)} tomograms with notes containing '{search_notes}'")
+                else:
+                    # Reset to show all tomograms
+                    filtered_df = df.copy()
+
             # Check if the user is searching for tomograms
-            if 'search_tomograms' in request.form:
+            elif 'search_tomograms' in request.form:
                 search_basename = request.form.get('search_basename', '').strip()
                 if search_basename:
                     # Search for tomograms with the basename
@@ -152,6 +178,7 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
                         flash(f"Automatically added {added_count} new tomograms matching '{search_basename}'")
                         # Reload data after adding tomograms
                         df = session.get_data()
+                        filtered_df = df.copy()
 
                     if not search_results:
                         flash(f"No tomograms found with basename '{search_basename}'")
@@ -170,6 +197,7 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
                         flash(f"Added new tomogram: {new_tomo_name}")
                         # Reload data after adding tomogram
                         df = session.get_data()
+                        filtered_df = df.copy()
                     else:
                         flash(f"Tomogram '{new_tomo_name}' already exists")
             else:
@@ -195,21 +223,21 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
                 flash('Data updated successfully')
                 # Reload data after updates
                 df = session.get_data()
+                filtered_df = df.copy()
+                # Reapply search filter if active
+                if search_notes:
+                    # Handle possible NaN or non-string values by converting to strings first
+                    filtered_df['notes_str'] = filtered_df['notes'].fillna('').astype(str)
+                    # Filter using the string column
+                    filtered_df = filtered_df[filtered_df['notes_str'].str.lower().str.contains(search_notes)]
+                    # Remove the temporary column
+                    filtered_df = filtered_df.drop(columns=['notes_str'])
 
         # Get tomo_names for media processing
         tomo_names = session.get_tomogram_names()
 
-        # Limit the number of tomograms to process in one request to prevent overload
-        batch_size = 10  # Adjust based on your server's capabilities
-        tomo_batch = tomo_names[:batch_size] if len(tomo_names) > batch_size else tomo_names
-
-        # Trigger media generation for tomogram batch
-        for tomo_name in tomo_batch:
-            if tomo_name:  # Skip empty names
-                try:
-                    media_manager.generate_media_for_tomogram(tomo_name)
-                except Exception as e:
-                    logger.error(f"Error triggering media generation for {tomo_name}: {str(e)}")
+        # Trigger media generation for all tomograms in the background
+        media_manager.batch_process_tomograms(tomo_names)
 
         # Get any thumbnails that are already available
         thumbnails = {}
@@ -220,14 +248,16 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
                     thumbnails[tomo_name] = thumbnail_path.split('/')[-1]
 
         return render_template('form.html',
-                               df=df,
+                               df=filtered_df,
+                               full_df=df,  # Pass both filtered and complete dataframe
                                thumbnails=thumbnails,
                                filename=filename,
                                paths=config.paths,
                                tomo_names_json=json.dumps(tomo_names),
                                search_results=search_results,
                                added_count=added_count,
-                               skipped_count=skipped_count)
+                               skipped_count=skipped_count,
+                               search_notes=search_notes)  # Pass current search query
 
 
     @session_bp.route('/detail/<filename>/<tomo_name>', methods=['GET', 'POST'])
@@ -283,12 +313,188 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
                             tiltseries_path=config.paths['tiltseries_path'],
                             tomogram_path=config.paths['tomogram_path'])
 
-
     @session_bp.route('/download/<filename>')
     def download_csv(filename):
         """Download session file."""
         return send_from_directory(config.upload_folder, filename, as_attachment=True)
 
+    @session_bp.route('/export_session/<filename>', methods=['GET'])
+    def export_session(filename):
+        """
+        Export session as a tarball including the CSV and all generated media files.
+        Creates a compressed archive with the session CSV and all related media.
+
+        Args:
+            filename (str): Name of the session file
+        """
+        # Load the session to get tomogram names
+        session = session_manager.load_session(filename)
+        if not session:
+            flash(f"Session not found: {filename}")
+            return redirect(url_for('session.upload_file'))
+
+        # Get tomogram names
+        tomo_names = session.get_tomogram_names()
+
+        # Create a temporary file for the tarball
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        tarball_filename = f"{os.path.splitext(filename)[0]}_{timestamp}.tar.gz"
+        tarball_path = os.path.join(tempfile.gettempdir(), tarball_filename)
+
+        try:
+            # Create tarball
+            with tarfile.open(tarball_path, "w:gz") as tar:
+                # Add session file
+                session_path = os.path.join(config.upload_folder, filename)
+                if os.path.exists(session_path):
+                    tar.add(session_path, arcname=filename)
+
+                # Add thumbnails
+                for tomo_name in tomo_names:
+                    if not tomo_name:  # Skip empty names
+                        continue
+
+                    # Add thumbnail if exists
+                    thumbnail_path = media_manager.get_thumbnail_path(tomo_name)
+                    if thumbnail_path and os.path.exists(thumbnail_path):
+                        thumbnail_name = os.path.basename(thumbnail_path)
+                        tar.add(thumbnail_path, arcname=f"thumbnails/{thumbnail_name}")
+
+                    # Add lowmag image if exists
+                    lowmag_path = os.path.join(config.lowmag_folder, f"{tomo_name}.jpg")
+                    if os.path.exists(lowmag_path):
+                        tar.add(lowmag_path, arcname=f"lowmag/{tomo_name}.jpg")
+
+                    # Add tilt series if exists
+                    tiltseries_path = os.path.join(config.tiltseries_folder, f"{tomo_name}.gif")
+                    if os.path.exists(tiltseries_path):
+                        tar.add(tiltseries_path, arcname=f"tiltseries/{tomo_name}.gif")
+
+                    # Add tomogram if exists
+                    tomogram_path = os.path.join(config.tomogram_folder, f"{tomo_name}.gif")
+                    if os.path.exists(tomogram_path):
+                        tar.add(tomogram_path, arcname=f"tomogram/{tomo_name}.gif")
+
+                # Add config.json if exists
+                if config.config_file and os.path.exists(config.config_file):
+                    tar.add(config.config_file, arcname="config.json")
+
+            # Move tarball to upload folder for downloading
+            download_path = os.path.join(config.upload_folder, tarball_filename)
+            os.rename(tarball_path, download_path)
+
+            flash(f"Session exported successfully as {tarball_filename}")
+
+            # Serve the tarball for download
+            return send_from_directory(config.upload_folder, tarball_filename, as_attachment=True)
+
+        except Exception as e:
+            logger.error(f"Error exporting session: {str(e)}")
+            flash(f"Error exporting session: {str(e)}")
+            return redirect(url_for('session.process_csv', filename=filename))
+
+    @session_bp.route('/import_archive', methods=['POST'])
+    def import_archive():
+        """
+        Import a previously exported tarball archive.
+        Extracts session file and media contents to the appropriate directories.
+        """
+        if 'archive_file' not in request.files:
+            flash('No archive file selected')
+            return redirect(url_for('session.upload_file'))
+
+        archive_file = request.files['archive_file']
+        if archive_file.filename == '':
+            flash('No selected file')
+            return redirect(url_for('session.upload_file'))
+
+        if not archive_file.filename.endswith(('.tar.gz', '.tgz')):
+            flash('Only .tar.gz or .tgz files are supported')
+            return redirect(url_for('session.upload_file'))
+
+        # Create a temporary directory to extract files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Save the uploaded file to the temp directory
+            archive_path = os.path.join(temp_dir, secure_filename(archive_file.filename))
+            archive_file.save(archive_path)
+
+            try:
+                session_filename = None
+
+                # Extract the archive
+                with tarfile.open(archive_path, "r:gz") as tar:
+                    # First, find the session file
+                    for member in tar.getmembers():
+                        if member.name.endswith('.csv'):
+                            session_filename = os.path.basename(member.name)
+                            break
+
+                    if not session_filename:
+                        flash('No valid session file found in the archive')
+                        return redirect(url_for('session.upload_file'))
+
+                    # Extract all files
+                    tar.extractall(path=temp_dir)
+
+                # Copy session file to upload folder
+                session_path = os.path.join(temp_dir, session_filename)
+                if os.path.exists(session_path):
+                    import shutil
+                    shutil.copy2(session_path, os.path.join(config.upload_folder, session_filename))
+
+                # Create necessary directories if they don't exist
+                os.makedirs(config.thumbnails_folder, exist_ok=True)
+                os.makedirs(config.lowmag_folder, exist_ok=True)
+                os.makedirs(config.tiltseries_folder, exist_ok=True)
+                os.makedirs(config.tomogram_folder, exist_ok=True)
+
+                # Copy thumbnails
+                thumbnails_dir = os.path.join(temp_dir, 'thumbnails')
+                if os.path.exists(thumbnails_dir):
+                    for file in os.listdir(thumbnails_dir):
+                        src = os.path.join(thumbnails_dir, file)
+                        dst = os.path.join(config.thumbnails_folder, file)
+                        if os.path.isfile(src):
+                            import shutil
+                            shutil.copy2(src, dst)
+
+                # Copy lowmag images
+                lowmag_dir = os.path.join(temp_dir, 'lowmag')
+                if os.path.exists(lowmag_dir):
+                    for file in os.listdir(lowmag_dir):
+                        src = os.path.join(lowmag_dir, file)
+                        dst = os.path.join(config.lowmag_folder, file)
+                        if os.path.isfile(src):
+                            import shutil
+                            shutil.copy2(src, dst)
+
+                # Copy tilt series
+                tiltseries_dir = os.path.join(temp_dir, 'tiltseries')
+                if os.path.exists(tiltseries_dir):
+                    for file in os.listdir(tiltseries_dir):
+                        src = os.path.join(tiltseries_dir, file)
+                        dst = os.path.join(config.tiltseries_folder, file)
+                        if os.path.isfile(src):
+                            import shutil
+                            shutil.copy2(src, dst)
+
+                # Copy tomograms
+                tomogram_dir = os.path.join(temp_dir, 'tomogram')
+                if os.path.exists(tomogram_dir):
+                    for file in os.listdir(tomogram_dir):
+                        src = os.path.join(tomogram_dir, file)
+                        dst = os.path.join(config.tomogram_folder, file)
+                        if os.path.isfile(src):
+                            import shutil
+                            shutil.copy2(src, dst)
+
+                flash(f"Successfully imported session from archive: {session_filename}")
+                return redirect(url_for('session.process_csv', filename=session_filename))
+
+            except Exception as e:
+                logger.error(f"Error importing archive: {str(e)}")
+                flash(f"Error importing archive: {str(e)}")
+                return redirect(url_for('session.upload_file'))
 
     # Return the blueprint - not strictly necessary but helps with clarity
     return session_bp
