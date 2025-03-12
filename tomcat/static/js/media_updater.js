@@ -158,21 +158,49 @@ function updateThumbnail(tomoName, thumbnailPath) {
 
     const { element } = data;
 
-    // Update the image source with cache-busting
-    const timestamp = new Date().getTime();
-    element.src = `/thumbnails/${thumbnailPath}?t=${timestamp}`;
+    // Find the containing div that might have a placeholder message
+    const placeholderContainer = element.closest('.placeholder');
+    const thumbnailContainer = element.closest('.thumbnail-container');
 
-    // Add loading and error handling
-    element.onload = () => {
+    // Create a new image with proper styling
+    const newImage = new Image();
+    newImage.onload = () => {
         logDebug(`Thumbnail for ${tomoName} loaded successfully`);
+
+        // Apply the same styling as regular thumbnails
+        newImage.className = element.className || '';
+        newImage.style.width = '100%';
+        newImage.style.height = '100%';
+        newImage.style.objectFit = 'contain';
+        newImage.alt = `${tomoName} thumbnail`;
+
+        // Replace placeholder with the actual thumbnail
+        if (placeholderContainer) {
+            // Clear the placeholder container and add the new image
+            placeholderContainer.innerHTML = '';
+            placeholderContainer.appendChild(newImage);
+            // Remove the placeholder class if it exists
+            placeholderContainer.classList.remove('placeholder');
+        } else if (thumbnailContainer) {
+            // Replace the existing image with the new one
+            element.parentNode.replaceChild(newImage, element);
+        } else {
+            // Just replace the element directly
+            element.parentNode.replaceChild(newImage, element);
+        }
+
         // Remove from monitoring
         monitoredMedia.thumbnails.delete(tomoName);
     };
 
-    element.onerror = () => {
+    newImage.onerror = () => {
         logDebug(`Failed to load thumbnail for ${tomoName}, will retry`);
         // Keep in monitoring, but don't increment attempts here
     };
+
+    // Update the image source with cache-busting
+    const timestamp = new Date().getTime();
+    newImage.src = `/thumbnails/${thumbnailPath}?t=${timestamp}`;
 }
 
 /**

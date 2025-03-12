@@ -72,8 +72,15 @@ class MediaManager:
         else:
             self.processing_queue[tomo_name] = True
 
-        # Process the queue (non-blocking)
-        self.process_queue()
+        # Only process the queue immediately if we haven't been called from within process_queue
+        # This avoids potential recursion issues
+        if not getattr(self, '_processing_queue_active', False):
+            try:
+                self._processing_queue_active = True
+                self.process_queue()
+            finally:
+                self._processing_queue_active = False
+
         return True
 
     def process_queue(self):
@@ -91,7 +98,8 @@ class MediaManager:
         for tomo_name in queue_keys:
             # Start media generation
             if started < max_to_start:
-                self.generate_media_for_tomogram(tomo_name)
+                # Use internal method to avoid recursion
+                self._generate_media_for_tomogram_internal(tomo_name)
                 started += 1
                 # Remove from queue once processed
                 del self.processing_queue[tomo_name]
@@ -119,10 +127,10 @@ class MediaManager:
 
         logger.info(f"Queued {len(tomo_list)} tomograms for processing")
 
-    def generate_media_for_tomogram(self, tomo_name):
+    def _generate_media_for_tomogram_internal(self, tomo_name):
         """
-        Trigger generation of all media types for a given tomogram.
-        This runs in the background using the thread pool.
+        Internal method to trigger generation of all media types for a given tomogram.
+        This version does not call process_queue to avoid recursion.
 
         Args:
             tomo_name (str): Name of the tomogram to generate media for
@@ -136,8 +144,16 @@ class MediaManager:
         # Clean up completed tasks
         self.thread_manager.cleanup_completed_tasks()
 
-        # Process any remaining items in the queue
-        self.process_queue()
+    def generate_media_for_tomogram(self, tomo_name):
+        """
+        Trigger generation of all media types for a given tomogram.
+        This runs in the background using the thread pool.
+
+        Args:
+            tomo_name (str): Name of the tomogram to generate media for
+        """
+        # Add to queue and process
+        self.queue_tomogram_for_processing(tomo_name, priority=True)
 
     def _check_and_generate_thumbnail(self, tomo_name):
         """

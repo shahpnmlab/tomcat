@@ -43,6 +43,12 @@
         .form-check-input[type="checkbox"] {
             transform: scale(1.2);
         }
+        .thumbnail-loading {
+            font-size: 0.8em;
+            color: #007bff;
+            text-align: center;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -159,15 +165,21 @@
                                     <img src="{{ url_for('serve_thumbnail', filename=thumbnails[row['tomo_name']]) }}"
                                          alt="{{ row['tomo_name'] }} thumbnail">
                                     {% else %}
-                                    <div class="placeholder">No thumbnail available</div>
+                                    <div class="placeholder">
+                                        <img data-thumbnail-name="{{ row['tomo_name'] }}"
+                                             alt="{{ row['tomo_name'] }} thumbnail"
+                                             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f8f9fa'/%3E%3Ctext x='50' y='50' font-size='12' text-anchor='middle' alignment-baseline='middle' font-family='Arial, sans-serif' fill='%236c757d'%3ELoading...%3C/text%3E%3C/svg%3E">
+                                        <div class="thumbnail-loading">Generating...</div>
+                                    </div>
                                     {% endif %}
                                 </div>
-                                <!-- Replace the tomo_name cell with a hyperlink to the detail view -->
-                                <td>
-                                    <a href="{{ url_for('detail_view', filename=filename, tomo_name=row['tomo_name']) }}" class="tomo-name">
-                                        {{ row['tomo_name'] }}
-                                    </a>
-                                </td>
+                            </td>
+                            <!-- Replace the tomo_name cell with a hyperlink to the detail view -->
+                            <td>
+                                <a href="{{ url_for('detail_view', filename=filename, tomo_name=row['tomo_name']) }}" class="tomo-name">
+                                    {{ row['tomo_name'] }}
+                                </a>
+                            </td>
                             <td>
                                 <input type="number" class="form-control" name="thickness_{{ index }}"
                                        value="{{ row['thickness'] }}" step="0.1">
@@ -205,6 +217,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Include the media updater script -->
+    <script src="{{ url_for('static', filename='js/media_updater.js') }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Make thumbnails clickable to navigate to the detail view
@@ -224,7 +238,24 @@
                 // Add a cursor pointer to indicate clickability
                 container.style.cursor = 'pointer';
             });
+
+            // Explicitly trigger media generation for all tomograms
+            if (window.tomo_names && window.tomo_names.length > 0) {
+                // Send a request to process all tomograms in the current view
+                fetch('/process_tomograms', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ tomograms: window.tomo_names }),
+                }).then(response => response.json())
+                  .then(data => console.log('Processing tomograms:', data))
+                  .catch(error => console.error('Error triggering tomogram processing:', error));
+            }
         });
+
+        // Make tomogram names available to JavaScript
+        window.tomo_names = {{ tomo_names_json|safe }};
     </script>
 </body>
 </html>

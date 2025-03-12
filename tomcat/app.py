@@ -6,7 +6,7 @@ both web interface and command-line functionality.
 """
 import logging
 import typer
-from flask import Flask
+from flask import Flask, request, jsonify
 
 # Import our modules
 from tomcat.config import Config
@@ -122,6 +122,11 @@ def create_app():
     def compat_serve_thumbnail(filename):
         """Compatibility route for old thumbnail serving requests"""
         return app.view_functions['media.serve_thumbnail'](filename)
+
+    @app.route('/process_tomograms', methods=['POST'])
+    def compat_process_tomograms():
+        """Compatibility route for batch processing tomograms"""
+        return app.view_functions['media.process_tomograms']()
 
     # Register template utilities
     register_template_utils(app)
