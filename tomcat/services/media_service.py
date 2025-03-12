@@ -7,6 +7,7 @@ thumbnails, animations, and other visualizations.
 import os
 import logging
 import glob
+from collections import OrderedDict
 
 # Import from utils package
 from tomcat.utils.file_utils import FileLocator
@@ -35,6 +36,9 @@ class MediaManager:
         # Media status tracking
         self.media_status = {}
 
+        # Ordered list of tomograms to process (maintains processing order)
+        self.processing_queue = OrderedDict()
+
         # Thumbnail progress tracking
         self.thumbnail_progress = {
             'total': 0,
@@ -44,6 +48,76 @@ class MediaManager:
             'completed_names': [],
             'thumbnail_paths': {}  # Dictionary to map tomo_name to its thumbnail path
         }
+
+    def queue_tomogram_for_processing(self, tomo_name, priority=False):
+        """
+        Add a tomogram to the processing queue.
+
+        Args:
+            tomo_name (str): Name of the tomogram to queue for processing
+            priority (bool): If True, add to the front of the queue
+
+        Returns:
+            bool: True if queued, False if already in queue
+        """
+        if tomo_name in self.processing_queue:
+            return False
+
+        # If priority, add to front, otherwise add to end
+        if priority:
+            # Create a new OrderedDict with this item first, then add all others
+            new_queue = OrderedDict([(tomo_name, True)])
+            new_queue.update(self.processing_queue)
+            self.processing_queue = new_queue
+        else:
+            self.processing_queue[tomo_name] = True
+
+        # Process the queue (non-blocking)
+        self.process_queue()
+        return True
+
+    def process_queue(self):
+        """
+        Process tomograms in the queue, starting media generation for each.
+        This is non-blocking as it schedules background tasks.
+        """
+        # Maximum number of active tasks to start at once
+        max_to_start = max(1, self.thread_manager.max_workers - self.thread_manager.get_active_task_count())
+        started = 0
+
+        # Process items in the queue order
+        queue_keys = list(self.processing_queue.keys())
+
+        for tomo_name in queue_keys:
+            # Start media generation
+            if started < max_to_start:
+                self.generate_media_for_tomogram(tomo_name)
+                started += 1
+                # Remove from queue once processed
+                del self.processing_queue[tomo_name]
+            else:
+                # Leave the rest in the queue for next time
+                break
+
+        # Clean up completed tasks
+        self.thread_manager.cleanup_completed_tasks()
+
+    def batch_process_tomograms(self, tomo_list):
+        """
+        Queue a batch of tomograms for processing.
+        Maintains the order provided in tomo_list.
+
+        Args:
+            tomo_list (list): List of tomogram names to process
+        """
+        # Update total count for tracking
+        self.thumbnail_progress['total'] = len(tomo_list)
+
+        # Queue each tomogram in order
+        for tomo_name in tomo_list:
+            self.queue_tomogram_for_processing(tomo_name)
+
+        logger.info(f"Queued {len(tomo_list)} tomograms for processing")
 
     def generate_media_for_tomogram(self, tomo_name):
         """
@@ -61,6 +135,9 @@ class MediaManager:
 
         # Clean up completed tasks
         self.thread_manager.cleanup_completed_tasks()
+
+        # Process any remaining items in the queue
+        self.process_queue()
 
     def _check_and_generate_thumbnail(self, tomo_name):
         """
@@ -190,6 +267,8 @@ class MediaManager:
                     self.thumbnail_progress['message'] = f'Generated thumbnail for {tomo_name}'
                     self.thumbnail_progress['completed_names'].append(tomo_name)
                     self.thumbnail_progress['thumbnail_paths'][tomo_name] = os.path.basename(output_file)
+                    # Update downloaded count
+                    self.thumbnail_progress['downloaded'] += 1
                     return True
                 else:
                     # File wasn't created or is empty
@@ -411,10 +490,10 @@ class MediaManager:
         # Check the status
         status = self.media_status.get(status_key, "unknown")
 
-        # If status is unknown but the file should be generating, update status
+        # If status is unknown but the file should be generating, update status and queue it
         if status == "unknown" and not os.path.exists(media_file):
             self.media_status[status_key] = "generating"
-            self.generate_media_for_tomogram(tomo_name)
+            self.queue_tomogram_for_processing(tomo_name, priority=True)  # Priority since user is requesting it
             status = "generating"
 
         return {
@@ -440,7 +519,13 @@ class MediaManager:
             return os.path.join(self.config.thumbnails_folder, thumbnail_filename)
 
         # Use file locator to find thumbnail
-        return self.file_locator.find_thumbnail(tomo_name, self.config.thumbnails_folder)
+        thumbnail_path = self.file_locator.find_thumbnail(tomo_name, self.config.thumbnails_folder)
+
+        # If not found, queue for generation
+        if not thumbnail_path:
+            self.queue_tomogram_for_processing(tomo_name)
+
+        return thumbnail_path
 
     def get_thumbnail_progress(self):
         """

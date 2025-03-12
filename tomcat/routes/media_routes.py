@@ -6,7 +6,7 @@ including thumbnails, lowmag images, tilt series and tomogram animations.
 """
 import os
 import logging
-from flask import Blueprint, send_from_directory, jsonify
+from flask import Blueprint, send_from_directory, jsonify, request
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,8 @@ def initialize_routes(config, media_manager):
         # Check if file exists and has content
         if not os.path.exists(file_path):
             logger.info(f"File does not exist: {file_path}")
-            # Try to generate the media if it doesn't exist
-            media_manager.generate_media_for_tomogram(tomo_name)
+            # Set as priority since user is explicitly requesting it
+            media_manager.queue_tomogram_for_processing(tomo_name, priority=True)
             # Return a 202 Accepted response to indicate processing
             return "", 202
 
@@ -63,7 +63,7 @@ def initialize_routes(config, media_manager):
             logger.warning(f"File exists but is empty: {file_path}")
             # Try to regenerate if the file is empty
             os.remove(file_path)
-            media_manager.generate_media_for_tomogram(tomo_name)
+            media_manager.queue_tomogram_for_processing(tomo_name, priority=True)
             return "", 202
 
         logger.info(f"Serving file: {file_path}, size: {os.path.getsize(file_path)} bytes")
@@ -114,6 +114,7 @@ def initialize_routes(config, media_manager):
                 'path': os.path.basename(thumbnail_path)
             })
         else:
+            # Thumbnail not available yet, but has been queued for generation
             return jsonify({'available': False})
 
     @media_bp.route('/thumbnail_progress')
@@ -122,6 +123,29 @@ def initialize_routes(config, media_manager):
         Return the current progress of thumbnail downloads.
         """
         return jsonify(media_manager.get_thumbnail_progress())
+
+    @media_bp.route('/process_tomograms', methods=['POST'])
+    def process_tomograms():
+        """
+        Endpoint to explicitly request processing of a list of tomograms.
+        This can be called from the frontend when tomograms are first loaded.
+        """
+        data = request.get_json()
+        if not data or 'tomograms' not in data:
+            return jsonify({'error': 'Missing tomogram list'}), 400
+
+        tomograms = data['tomograms']
+        if not isinstance(tomograms, list):
+            return jsonify({'error': 'Tomograms must be a list'}), 400
+
+        # Queue all tomograms for processing in the order provided
+        media_manager.batch_process_tomograms(tomograms)
+
+        return jsonify({
+            'status': 'processing',
+            'message': f'Processing {len(tomograms)} tomograms',
+            'count': len(tomograms)
+        })
 
     # Return the blueprint - not strictly necessary but helps with clarity
     return media_bp

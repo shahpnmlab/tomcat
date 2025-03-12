@@ -41,9 +41,11 @@ def initialize_routes(config):
             # Check if there's a current session to return to
             current_session = flask_session.get('current_session')
             if current_session:
+                # Redirect directly to process_csv (tomogram thumbnails page) when paths are set
                 return redirect(url_for('session.process_csv', filename=current_session))
             else:
-                return redirect(url_for('session.upload_file'))
+                # If no session exists yet, create a new one instead of going to upload page
+                return redirect(url_for('session.new_session'))
 
         return render_template('settings.html', paths=config.paths)
 
