@@ -10,7 +10,7 @@ TomCat is a web-based tool for cataloging and managing tomography data, providin
 - View low-mag overviews, tilt series animations, and tomogram animations
 - Add notes, scores, and other metadata to tomograms
 - Search for tomograms across multiple data directories
-- Export session data as CSV files
+- Autosave and export session data as CSV files and gifs as well as thumbnails
 
 ## Installation
 

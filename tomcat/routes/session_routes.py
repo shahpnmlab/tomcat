@@ -10,7 +10,8 @@ import logging
 import tarfile
 import tempfile
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory, session as flask_session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory, \
+    session as flask_session, jsonify
 from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,55 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
             logger.error(f"Exception in new_session: {str(e)}")
             flash(f"Error creating new session: {str(e)}")
             return redirect(url_for('session.upload_file'))
+
+    @session_bp.route('/autosave/<filename>', methods=['POST'])
+    def autosave(filename):
+        """
+        Autosave session data without refreshing the page.
+        """
+        # Load the session
+        session = session_manager.load_session(filename)
+        if not session:
+            return jsonify({"status": "error", "message": "Session not found"}), 404
+
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"status": "error", "message": "No data provided"}), 400
+
+            # Get existing tomogram names to verify we only update existing entries
+            existing_names = session.get_tomogram_names()
+
+            # Update tomogram data from the request
+            updates = data.get('updates', [])
+            updated_count = 0
+
+            for update in updates:
+                tomo_name = update.get('tomo_name')
+                if not tomo_name or tomo_name not in existing_names:
+                    continue  # Skip if tomo_name doesn't exist in the session
+
+                # Update row in dataframe
+                success = session.update_tomogram_data(
+                    tomo_name,
+                    thickness=update.get('thickness'),
+                    notes=update.get('notes'),
+                    delete=update.get('delete', False),
+                    score=update.get('score'),
+                    double_confirmed=update.get('double_confirmed', False)
+                )
+
+                if success:
+                    updated_count += 1
+
+            return jsonify({
+                "status": "success",
+                "message": f"Autosave successful, updated {updated_count} entries",
+                "updatedCount": updated_count
+            })
+        except Exception as e:
+            logger.error(f"Error in autosave: {str(e)}")
+            return jsonify({"status": "error", "message": str(e)}), 500
 
     @session_bp.route('/process/<filename>', methods=['GET', 'POST'])
     def process_csv(filename):
