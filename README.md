@@ -17,7 +17,7 @@ TomCat is a web-based tool for cataloging and managing tomography data, providin
 ```bash
 conda create -n tomcat python=3.10
 conda activate tomcat
-git clone https://github.com/yourusername/tomcat.git
+git clone https://github.com/shahpnmlab/tomcat.git
 cd tomcat
 pip install -e .
 ```
