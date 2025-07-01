@@ -60,6 +60,17 @@
             margin-bottom: 15px;
             text-align: center;
         }
+    /* ... existing styles ... */
+    .table-responsive {
+        max-height: 80vh; /* Set a max height for the scrollable area */
+    }
+    thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa; /* Match table-light background */
+        z-index: 10; /* Ensure header stays above table content */
+    }
+    /* ... existing styles ... */
     </style>
 </head>
 <body>
