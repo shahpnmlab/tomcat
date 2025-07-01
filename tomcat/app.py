@@ -30,9 +30,6 @@ logger = logging.getLogger(__name__)
 # Create Typer CLI app
 cli = typer.Typer(help="TomCat - Tomography Catalogue Tool")
 
-# In-memory store for background job statuses
-search_jobs = {}
-
 # Initialize core components
 app = None
 config = None
@@ -54,6 +51,9 @@ def create_app():
     # Initialize Flask application
     app = Flask(__name__)
     app.secret_key = 'tomcat_secret_key'
+
+    # ADD THIS LINE:
+    app.search_jobs = {} # Correctly attach to the app instance
 
     # Initialize configuration
     config = Config()
