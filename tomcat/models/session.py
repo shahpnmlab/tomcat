@@ -9,6 +9,7 @@ import time
 import logging
 import pandas as pd
 from werkzeug.utils import secure_filename
+from contextlib import contextmanager # Add this import
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class Session:
             'score': [],
             'double_confirmed': []
         })
+        self._defer_save = False # Add this line
 
         # Load existing session if filename is provided
         if filename:
@@ -168,6 +170,16 @@ class Session:
         # Return a copy of the dataframe sorted by tomo_name in ascending order
         return self._df.sort_values('tomo_name', ascending=True).reset_index(drop=True)
 
+    @contextmanager
+    def deferred_save(self):
+        """Context manager to defer saving until the block is exited."""
+        self._defer_save = True
+        try:
+            yield
+        finally:
+            self._defer_save = False
+            self.save()
+
     def get_tomogram_data(self, tomo_name):
         """
         Get data for a specific tomogram.
@@ -205,8 +217,10 @@ class Session:
                 if key in self._df.columns:
                     self._df.loc[self._df['tomo_name'] == tomo_name, key] = value
 
-            # Save the updated session
-            return self.save()
+            # Save the updated session unless deferred
+            if not self._defer_save:
+                return self.save()
+            return True
 
         except Exception as e:
             logger.error(f"Error updating tomogram data: {str(e)}")
