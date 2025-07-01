@@ -182,130 +182,84 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
         added_count = 0
         skipped_count = 0
         search_notes = ""
-        filtered_df = df.copy()
 
-        # Handle POST request - form submission
+        # Handle form submission for adding entries (before pagination)
         if request.method == 'POST':
-            # Check if user is searching notes
-            if 'search_notes' in request.form:
-                search_notes = request.form.get('notes_query', '').strip().lower()
-                if search_notes:
-                    # Convert notes column to string first to handle non-string values
-                    filtered_df = df.copy()
-                    # Handle possible NaN or non-string values by converting to strings first
-                    filtered_df['notes_str'] = filtered_df['notes'].fillna('').astype(str)
-                    # Filter using the string column
-                    filtered_df = filtered_df[filtered_df['notes_str'].str.lower().str.contains(search_notes)]
-                    # Remove the temporary column
-                    filtered_df = filtered_df.drop(columns=['notes_str'])
-
-                    if len(filtered_df) == 0:
-                        flash(f"No tomograms found with notes containing '{search_notes}'")
-                    else:
-                        flash(f"Found {len(filtered_df)} tomograms with notes containing '{search_notes}'")
-                else:
-                    # Reset to show all tomograms
-                    filtered_df = df.copy()
-
-            # Check if the user is searching for tomograms
-            elif 'search_tomograms' in request.form:
+            # Check if user is searching for tomograms (this will be moved to async later)
+            if 'search_tomograms' in request.form:
                 search_basename = request.form.get('search_basename', '').strip()
                 if search_basename:
-                    # Search for tomograms with the basename
                     search_results = file_locator.search_tomograms(search_basename)
-
-                    # Mark tomograms that already exist in the session
                     existing_tomo_names = session.get_tomogram_names()
                     for result in search_results:
                         result['exists'] = result['name'] in existing_tomo_names
 
-                    # Automatically add all non-existing tomograms
                     added_count, skipped_count = session.add_tomograms_from_search(search_results)
-
                     if added_count > 0:
                         flash(f"Automatically added {added_count} new tomograms matching '{search_basename}'")
-                        # Reload data after adding tomograms
-                        df = session.get_data()
-                        filtered_df = df.copy()
+                        return redirect(url_for('session.process_csv', filename=filename)) # Redirect to refresh data
 
                     if not search_results:
                         flash(f"No tomograms found with basename '{search_basename}'")
-
-                    # Set search_results to simply the count for the template
                     search_results = {'count': len(search_results)}
 
             # Check if the user is manually adding a new entry
             elif 'add_new_entry' in request.form:
-                # Get the new entry details
                 new_tomo_name = request.form.get('new_tomo_name', '').strip()
-
                 if new_tomo_name:
-                    # Add the new tomogram
                     if session.add_tomogram(new_tomo_name):
                         flash(f"Added new tomogram: {new_tomo_name}")
-                        # Reload data after adding tomogram
-                        df = session.get_data()
-                        filtered_df = df.copy()
+                        return redirect(url_for('session.process_csv', filename=filename)) # Redirect to refresh
                     else:
                         flash(f"Tomogram '{new_tomo_name}' already exists")
-            else:
-                # Update existing entries
-                for index, row in df.iterrows():
-                    # Get values from form
-                    thickness = request.form.get(f"thickness_{index}")
-                    notes = request.form.get(f"notes_{index}")
-                    delete = request.form.get(f"delete_{index}") == "on"
-                    score = request.form.get(f"score_{index}")
-                    double_confirmed = request.form.get(f"double_confirmed_{index}") == "on"
 
-                    # Update row in dataframe
-                    session.update_tomogram_data(
-                        row['tomo_name'],
-                        thickness=thickness,
-                        notes=notes,
-                        delete=delete,
-                        score=score,
-                        double_confirmed=double_confirmed
-                    )
+        # Handle notes search
+        if 'search_notes' in request.form:
+            search_notes = request.form.get('notes_query', '').strip().lower()
+            if search_notes:
+                df['notes_str'] = df['notes'].fillna('').astype(str)
+                df = df[df['notes_str'].str.lower().str.contains(search_notes)].drop(columns=['notes_str'])
+                if len(df) == 0:
+                    flash(f"No tomograms found with notes containing '{search_notes}'")
 
-                flash('Data updated successfully')
-                # Reload data after updates
-                df = session.get_data()
-                filtered_df = df.copy()
-                # Reapply search filter if active
-                if search_notes:
-                    # Handle possible NaN or non-string values by converting to strings first
-                    filtered_df['notes_str'] = filtered_df['notes'].fillna('').astype(str)
-                    # Filter using the string column
-                    filtered_df = filtered_df[filtered_df['notes_str'].str.lower().str.contains(search_notes)]
-                    # Remove the temporary column
-                    filtered_df = filtered_df.drop(columns=['notes_str'])
+        # --- PAGINATION LOGIC ---
+        page = request.args.get('page', 1, type=int)
+        per_page = 50  # Items per page
+        total_rows = len(df)
+        total_pages = (total_rows + per_page - 1) // per_page
 
-        # Get tomo_names for media processing
-        tomo_names = session.get_tomogram_names()
+        start_index = (page - 1) * per_page
+        end_index = start_index + per_page
 
-        # Trigger media generation for all tomograms in the background
+        paginated_df = df.iloc[start_index:end_index]
+        # --- END PAGINATION LOGIC ---
+
+        tomo_names = paginated_df['tomo_name'].tolist()
         media_manager.batch_process_tomograms(tomo_names)
 
-        # Get any thumbnails that are already available
         thumbnails = {}
         for tomo_name in tomo_names:
-            if tomo_name:  # Skip empty names
+            if tomo_name:
                 thumbnail_path = media_manager.get_thumbnail_path(tomo_name)
                 if thumbnail_path:
                     thumbnails[tomo_name] = thumbnail_path.split('/')[-1]
 
         return render_template('form.html',
-                               df=filtered_df,
-                               full_df=df,  # Pass both filtered and complete dataframe
-                               thumbnails=thumbnails,
+                               df=paginated_df,
                                filename=filename,
                                paths=config.paths,
+                               thumbnails=thumbnails,
                                tomo_names_json=json.dumps(tomo_names),
                                search_results=search_results,
                                added_count=added_count,
                                skipped_count=skipped_count,
-                               search_notes=search_notes)  # Pass current search query
+                               search_notes=search_notes,
+                               pagination={
+                                   'page': page,
+                                   'per_page': per_page,
+                                   'total_pages': total_pages,
+                                   'total_rows': total_rows
+                               })
 
 
     @session_bp.route('/detail/<filename>/<tomo_name>', methods=['GET', 'POST'])
