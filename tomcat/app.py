@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 # Create Typer CLI app
 cli = typer.Typer(help="TomCat - Tomography Catalogue Tool")
 
+# In-memory store for background job statuses
+search_jobs = {}
+
 # Initialize core components
 app = None
 config = None
@@ -79,7 +82,7 @@ def create_app():
 
     app.register_blueprint(
         session_routes.initialize_routes(
-            config, session_manager, file_locator, media_manager, allowed_file
+            config, session_manager, file_locator, media_manager, allowed_file, thread_manager
         ),
         url_prefix='/session'
     )
