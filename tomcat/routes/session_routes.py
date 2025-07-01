@@ -133,30 +133,28 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
             if not data:
                 return jsonify({"status": "error", "message": "No data provided"}), 400
 
-            # Get existing tomogram names to verify we only update existing entries
-            existing_names = session.get_tomogram_names()
-
-            # Update tomogram data from the request
             updates = data.get('updates', [])
             updated_count = 0
 
-            for update in updates:
-                tomo_name = update.get('tomo_name')
-                if not tomo_name or tomo_name not in existing_names:
-                    continue  # Skip if tomo_name doesn't exist in the session
+            # Defer saving until all updates are processed
+            with session.deferred_save():
+                for update in updates:
+                    tomo_name = update.get('tomo_name')
+                    if not tomo_name:
+                        continue
 
-                # Update row in dataframe
-                success = session.update_tomogram_data(
-                    tomo_name,
-                    thickness=update.get('thickness'),
-                    notes=update.get('notes'),
-                    delete=update.get('delete', False),
-                    score=update.get('score'),
-                    double_confirmed=update.get('double_confirmed', False)
-                )
+                    # Update row in dataframe without saving immediately
+                    success = session.update_tomogram_data(
+                        tomo_name,
+                        thickness=update.get('thickness'),
+                        notes=update.get('notes'),
+                        delete=update.get('delete', False),
+                        score=update.get('score'),
+                        double_confirmed=update.get('double_confirmed', False)
+                    )
 
-                if success:
-                    updated_count += 1
+                    if success:
+                        updated_count += 1
 
             return jsonify({
                 "status": "success",
