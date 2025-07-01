@@ -11,8 +11,9 @@ import tarfile
 import tempfile
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory, \
-    session as flask_session, jsonify
+    session as flask_session, jsonify, current_app
 from werkzeug.utils import secure_filename
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +21,54 @@ logger = logging.getLogger(__name__)
 session_bp = Blueprint('session', __name__)
 
 
-def initialize_routes(config, session_manager, file_locator, media_manager, allowed_file_func):
+def initialize_routes(config, session_manager_instance, file_locator_instance, media_manager_instance, allowed_file_func, thread_manager_instance):
     """
     Initialize session routes with required dependencies.
 
     Args:
         config: Application configuration object
-        session_manager: Session manager instance
-        file_locator: File locator instance
-        media_manager: Media manager instance
+        session_manager_instance: Session manager instance
+        file_locator_instance: File locator instance
+        media_manager_instance: Media manager instance
         allowed_file_func: Function to check if a file is allowed
+        thread_manager_instance: Thread manager instance
     """
+    # Make dependencies available to route handlers in this blueprint
+    # For session_manager, file_locator, media_manager, use the passed instances directly in route functions
+    # or assign to module-level variables if they are truly global for the blueprint context.
+    # For simplicity here, we'll use the instance names directly in the functions where needed.
+    # If run_search_and_add needs them, it will get them from its closure or app context.
+
+    # Store thread_manager for use in start_search
+    # Note: Python's closures will allow inner functions to access these.
+    # To be explicit for run_search_and_add, ensure it can access session_manager and file_locator.
+    # These are already available in its closure from the outer initialize_routes scope.
+
+    # Rename to avoid conflict with module names if any, and to be clear these are instances
+    session_manager = session_manager_instance
+    file_locator = file_locator_instance
+    media_manager = media_manager_instance
+    thread_manager = thread_manager_instance
+
+
+    def run_search_and_add(job_id, app_context, filename, basename):
+        """The actual search task that runs in a background thread."""
+        with app_context: # app_context provides access to current_app, config, etc.
+            try:
+                # Access session_manager and file_locator from the closure of initialize_routes
+                current_app.search_jobs[job_id]['status'] = 'running'
+
+                session = session_manager.load_session(filename) # Uses session_manager from outer scope
+                search_results = file_locator.search_tomograms(basename) # Uses file_locator from outer scope
+                if search_results:
+                    session.add_tomograms_from_search(search_results)
+
+                current_app.search_jobs[job_id]['status'] = 'complete'
+                current_app.search_jobs[job_id]['result_count'] = len(search_results) if search_results else 0
+            except Exception as e:
+                logger.error(f"Search job {job_id} failed: {e}")
+                current_app.search_jobs[job_id]['status'] = 'failed'
+                current_app.search_jobs[job_id]['error'] = str(e)
 
     @session_bp.route('/', methods=['GET', 'POST'])
     def upload_file():
@@ -118,6 +156,36 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
             flash(f"Error creating new session: {str(e)}")
             return redirect(url_for('session.upload_file'))
 
+    @session_bp.route('/start_search/<filename>', methods=['POST'])
+    def start_search(filename):
+        """Starts a background search for tomograms."""
+        basename = request.form.get('search_basename', '').strip()
+        if not basename:
+            return jsonify({'error': 'Search basename cannot be empty'}), 400
+
+        job_id = str(uuid.uuid4())
+        current_app.search_jobs[job_id] = {'status': 'queued'}
+
+        # Submit the task to the thread manager (now available from initialize_routes closure)
+        thread_manager.submit_task(
+            f"search_{job_id}",
+            run_search_and_add,
+            job_id,
+            current_app.app_context(), # Pass app context to background thread
+            filename,
+            basename
+        )
+
+        return jsonify({'job_id': job_id})
+
+    @session_bp.route('/search_status/<job_id>')
+    def search_status(job_id):
+        """Checks the status of a background search job."""
+        job = current_app.search_jobs.get(job_id)
+        if not job:
+            return jsonify({'status': 'not_found'}), 404
+        return jsonify(job)
+
     @session_bp.route('/autosave/<filename>', methods=['POST'])
     def autosave(filename):
         """
@@ -182,130 +250,71 @@ def initialize_routes(config, session_manager, file_locator, media_manager, allo
         added_count = 0
         skipped_count = 0
         search_notes = ""
-        filtered_df = df.copy()
 
-        # Handle POST request - form submission
+        # Handle form submission for adding entries (before pagination)
         if request.method == 'POST':
-            # Check if user is searching notes
-            if 'search_notes' in request.form:
-                search_notes = request.form.get('notes_query', '').strip().lower()
-                if search_notes:
-                    # Convert notes column to string first to handle non-string values
-                    filtered_df = df.copy()
-                    # Handle possible NaN or non-string values by converting to strings first
-                    filtered_df['notes_str'] = filtered_df['notes'].fillna('').astype(str)
-                    # Filter using the string column
-                    filtered_df = filtered_df[filtered_df['notes_str'].str.lower().str.contains(search_notes)]
-                    # Remove the temporary column
-                    filtered_df = filtered_df.drop(columns=['notes_str'])
-
-                    if len(filtered_df) == 0:
-                        flash(f"No tomograms found with notes containing '{search_notes}'")
-                    else:
-                        flash(f"Found {len(filtered_df)} tomograms with notes containing '{search_notes}'")
-                else:
-                    # Reset to show all tomograms
-                    filtered_df = df.copy()
-
-            # Check if the user is searching for tomograms
-            elif 'search_tomograms' in request.form:
-                search_basename = request.form.get('search_basename', '').strip()
-                if search_basename:
-                    # Search for tomograms with the basename
-                    search_results = file_locator.search_tomograms(search_basename)
-
-                    # Mark tomograms that already exist in the session
-                    existing_tomo_names = session.get_tomogram_names()
-                    for result in search_results:
-                        result['exists'] = result['name'] in existing_tomo_names
-
-                    # Automatically add all non-existing tomograms
-                    added_count, skipped_count = session.add_tomograms_from_search(search_results)
-
-                    if added_count > 0:
-                        flash(f"Automatically added {added_count} new tomograms matching '{search_basename}'")
-                        # Reload data after adding tomograms
-                        df = session.get_data()
-                        filtered_df = df.copy()
-
-                    if not search_results:
-                        flash(f"No tomograms found with basename '{search_basename}'")
-
-                    # Set search_results to simply the count for the template
-                    search_results = {'count': len(search_results)}
+            # Synchronous search logic is removed. It's now handled by start_search and background task.
+            # The 'search_tomograms' form submission will be caught by frontend JS.
+            # If it ever reaches here (e.g. JS disabled), it will fall through or could be handled as an error.
+            # For now, we assume JS will prevent default and call start_search.
 
             # Check if the user is manually adding a new entry
-            elif 'add_new_entry' in request.form:
-                # Get the new entry details
+            if 'add_new_entry' in request.form: # This part remains
                 new_tomo_name = request.form.get('new_tomo_name', '').strip()
-
                 if new_tomo_name:
-                    # Add the new tomogram
                     if session.add_tomogram(new_tomo_name):
                         flash(f"Added new tomogram: {new_tomo_name}")
-                        # Reload data after adding tomogram
-                        df = session.get_data()
-                        filtered_df = df.copy()
+                        return redirect(url_for('session.process_csv', filename=filename)) # Redirect to refresh
                     else:
                         flash(f"Tomogram '{new_tomo_name}' already exists")
-            else:
-                # Update existing entries
-                for index, row in df.iterrows():
-                    # Get values from form
-                    thickness = request.form.get(f"thickness_{index}")
-                    notes = request.form.get(f"notes_{index}")
-                    delete = request.form.get(f"delete_{index}") == "on"
-                    score = request.form.get(f"score_{index}")
-                    double_confirmed = request.form.get(f"double_confirmed_{index}") == "on"
 
-                    # Update row in dataframe
-                    session.update_tomogram_data(
-                        row['tomo_name'],
-                        thickness=thickness,
-                        notes=notes,
-                        delete=delete,
-                        score=score,
-                        double_confirmed=double_confirmed
-                    )
+        # Handle notes search
+        if 'search_notes' in request.form:
+            search_notes = request.form.get('notes_query', '').strip().lower()
+            if search_notes:
+                df['notes_str'] = df['notes'].fillna('').astype(str)
+                df = df[df['notes_str'].str.lower().str.contains(search_notes)].drop(columns=['notes_str'])
+                if len(df) == 0:
+                    flash(f"No tomograms found with notes containing '{search_notes}'")
 
-                flash('Data updated successfully')
-                # Reload data after updates
-                df = session.get_data()
-                filtered_df = df.copy()
-                # Reapply search filter if active
-                if search_notes:
-                    # Handle possible NaN or non-string values by converting to strings first
-                    filtered_df['notes_str'] = filtered_df['notes'].fillna('').astype(str)
-                    # Filter using the string column
-                    filtered_df = filtered_df[filtered_df['notes_str'].str.lower().str.contains(search_notes)]
-                    # Remove the temporary column
-                    filtered_df = filtered_df.drop(columns=['notes_str'])
+        # --- PAGINATION LOGIC ---
+        page = request.args.get('page', 1, type=int)
+        per_page = 50  # Items per page
+        total_rows = len(df)
+        total_pages = (total_rows + per_page - 1) // per_page
 
-        # Get tomo_names for media processing
-        tomo_names = session.get_tomogram_names()
+        start_index = (page - 1) * per_page
+        end_index = start_index + per_page
 
-        # Trigger media generation for all tomograms in the background
+        paginated_df = df.iloc[start_index:end_index]
+        # --- END PAGINATION LOGIC ---
+
+        tomo_names = paginated_df['tomo_name'].tolist()
         media_manager.batch_process_tomograms(tomo_names)
 
-        # Get any thumbnails that are already available
         thumbnails = {}
         for tomo_name in tomo_names:
-            if tomo_name:  # Skip empty names
+            if tomo_name:
                 thumbnail_path = media_manager.get_thumbnail_path(tomo_name)
                 if thumbnail_path:
                     thumbnails[tomo_name] = thumbnail_path.split('/')[-1]
 
         return render_template('form.html',
-                               df=filtered_df,
-                               full_df=df,  # Pass both filtered and complete dataframe
-                               thumbnails=thumbnails,
+                               df=paginated_df,
                                filename=filename,
                                paths=config.paths,
+                               thumbnails=thumbnails,
                                tomo_names_json=json.dumps(tomo_names),
                                search_results=search_results,
                                added_count=added_count,
                                skipped_count=skipped_count,
-                               search_notes=search_notes)  # Pass current search query
+                               search_notes=search_notes,
+                               pagination={
+                                   'page': page,
+                                   'per_page': per_page,
+                                   'total_pages': total_pages,
+                                   'total_rows': total_rows
+                               })
 
 
     @session_bp.route('/detail/<filename>/<tomo_name>', methods=['GET', 'POST'])

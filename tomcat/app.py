@@ -52,6 +52,9 @@ def create_app():
     app = Flask(__name__)
     app.secret_key = 'tomcat_secret_key'
 
+    # ADD THIS LINE:
+    app.search_jobs = {} # Correctly attach to the app instance
+
     # Initialize configuration
     config = Config()
 
@@ -79,7 +82,7 @@ def create_app():
 
     app.register_blueprint(
         session_routes.initialize_routes(
-            config, session_manager, file_locator, media_manager, allowed_file
+            config, session_manager, file_locator, media_manager, allowed_file, thread_manager
         ),
         url_prefix='/session'
     )

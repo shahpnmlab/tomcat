@@ -60,27 +60,6 @@
             margin-bottom: 15px;
             text-align: center;
         }
-    /* ... existing styles ... */
-    .table-responsive {
-        max-height: 80vh; /* Set a max height for the scrollable area */
-    }
-    thead th {
-        position: sticky;
-        top: 0;
-        background-color: #f8f9fa; /* Match table-light background */
-        z-index: 10; /* Ensure header stays above table content */
-    }
-    /* ... existing styles ... */
-        .floating-save-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
     </style>
 </head>
 <body>
@@ -145,13 +124,13 @@
                 <h2 class="h5 mb-0">Search and Add Tomograms</h2>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('session.process_csv', filename=filename) }}">
+                <form id="search-form" method="POST" action="{{ url_for('session.process_csv', filename=filename) }}">
                     <div class="row">
                         <div class="col-md-8">
                             <div class="input-group mb-3">
                                 <input type="text" class="form-control" name="search_basename"
                                        placeholder="Enter basename to search for tomograms">
-                                <button type="submit" name="search_tomograms" value="1" class="btn btn-primary">
+                                <button type="button" id="search-button" class="btn btn-primary">
                                     <i class="bi bi-search"></i> Search Tomograms
                                 </button>
                             </div>
@@ -159,7 +138,9 @@
                         </div>
                         <div class="col-md-4">
                             <div class="d-flex justify-content-end">
-                                {% if search_results and search_results.count > 0 %}
+                                {# This button might need to be handled differently if it's part of the async search UX #}
+                                {# For now, leaving as is, assuming it's separate or will be removed/handled by other JS if form submission is fully prevented #}
+                                {% if search_results and search_results.count > 0 and not search_notes %}
                                 <button type="submit" name="add_searched" value="1" class="btn btn-success">
                                     Add Selected Tomograms
                                 </button>
@@ -168,7 +149,7 @@
                         </div>
                     </div>
 
-                    {% if search_results %}
+                    {% if search_results and not search_notes %} {# Ensure this doesn't show for notes search results #}
                     <div class="mt-3">
                         <div class="alert alert-info">
                             {% if search_results.count > 0 %}
@@ -200,6 +181,7 @@
                         </div>
                     </div>
                 </form>
+                <div id="search-status-indicator" class="mt-3" style="display:none;"></div>
             </div>
         </div>
 
@@ -278,11 +260,10 @@
                 </table>
             </div>
 
-        <!-- This container will now float -->
-        <div class="floating-save-container">
-            <button type="button" id="save-button" class="btn btn-outline-primary me-2">Quick Save</button>
-            <button type="submit" class="btn btn-primary">Save & Reload</button>
-        </div>
+            <div class="d-flex justify-content-end mb-4">
+                <button type="button" id="save-button" class="btn btn-outline-primary me-2">Quick Save</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
         </form>
     </div>
 
@@ -458,5 +439,71 @@
             }
         });
     </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchButton = document.getElementById('search-button');
+    const searchForm = document.getElementById('search-form');
+    const statusIndicator = document.getElementById('search-status-indicator');
+
+    searchButton.addEventListener('click', function() { // Listen for a CLICK now
+        const formData = new FormData(searchForm);
+        const searchBasename = formData.get('search_basename');
+        if (!searchBasename.trim()) {
+            alert('Please enter a search term.');
+            return;
+        }
+
+        // Show loading state
+        statusIndicator.style.display = 'block';
+        statusIndicator.className = 'alert alert-info';
+        statusIndicator.textContent = 'Starting search...';
+
+        fetch("{{ url_for('session.start_search', filename=filename) }}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.job_id) {
+                statusIndicator.textContent = 'Searching for tomograms... This may take a moment.';
+                pollSearchStatus(data.job_id);
+            } else {
+                statusIndicator.className = 'alert alert-danger';
+                statusIndicator.textContent = 'Error: ' + (data.error || 'Could not start search.');
+            }
+        })
+        .catch(error => {
+            statusIndicator.className = 'alert alert-danger';
+            statusIndicator.textContent = 'A network error occurred.';
+            console.error('Error starting search:', error);
+        });
+    });
+
+    function pollSearchStatus(jobId) {
+        const intervalId = setInterval(() => {
+            fetch(`/session/search_status/${jobId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'complete') {
+                        clearInterval(intervalId);
+                        statusIndicator.className = 'alert alert-success';
+                        statusIndicator.textContent = `Search complete! Found ${data.result_count || 0} tomograms. Reloading page...`;
+                        setTimeout(() => location.reload(), 1500);
+                    } else if (data.status === 'failed') {
+                        clearInterval(intervalId);
+                        statusIndicator.className = 'alert alert-danger';
+                        statusIndicator.textContent = 'Search failed: ' + (data.error || 'An unknown error occurred.');
+                    }
+                })
+                .catch(error => {
+                    clearInterval(intervalId);
+                    statusIndicator.className = 'alert alert-danger';
+                    statusIndicator.textContent = 'Error checking search status.';
+                    console.error('Polling error:', error);
+                });
+        }, 3000); // Poll every 3 seconds
+    }
+});
+</script>
 </body>
 </html>
