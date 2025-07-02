@@ -518,3 +518,50 @@ class MediaManager:
             dict: Thumbnail generation progress information
         """
         return self.thumbnail_progress
+
+    def _generate_frames_worker(self, media_type, tomo_name):
+        """Worker task to generate interactive frames and update status."""
+        from tomcat.utils.media_utils import generate_frames_from_mrc
+
+        status_key = f"interactive_{media_type}_{tomo_name}"
+        frames_dir = os.path.join(self.config.media_cache_dir, tomo_name, f"frames_{media_type}")
+
+        try:
+            source_file = None
+            if media_type == 'tiltseries':
+                source_file = self.file_locator.find_tiltseries_file(tomo_name)
+            elif media_type == 'tomogram':
+                source_file = self.file_locator.find_tomogram_file(tomo_name)
+
+            if not source_file:
+                # Ensure the frames directory exists for os.listdir checks by the API, even if source is missing
+                os.makedirs(frames_dir, exist_ok=True)
+                raise FileNotFoundError(f"Source file not found for {media_type} {tomo_name}")
+
+            # Ensure output directory exists before generating frames
+            os.makedirs(frames_dir, exist_ok=True)
+
+            # The utility function does the heavy lifting
+            frame_count = generate_frames_from_mrc(source_file, frames_dir, media_type)
+
+            if frame_count > 0:
+                self.media_status[status_key] = "ready"
+                logger.info(f"Successfully generated {frame_count} frames for {media_type} {tomo_name}")
+            else:
+                # This case handles when the MRC file might be empty or invalid, or if generate_frames_from_mrc returns 0 for other reasons
+                logger.warning(f"Frame generation resulted in 0 frames for {media_type} {tomo_name} from {source_file}.")
+                raise ValueError(f"Frame generation resulted in 0 frames for {media_type} {tomo_name}.")
+
+        except Exception as e:
+            # If anything goes wrong, update the status to 'error'
+            self.media_status[status_key] = "error"
+            logger.error(f"Error in frame generation worker for {media_type} {tomo_name}: {e}", exc_info=True)
+            # Attempt to clean up frames_dir if it was created by this worker instance and is empty or partially filled due to error
+            try:
+                if os.path.isdir(frames_dir) and not os.listdir(frames_dir): # Only remove if empty
+                    logger.info(f"Cleaning up empty frames directory due to error: {frames_dir}")
+                    os.rmdir(frames_dir) # Use rmdir for empty directory
+                elif os.path.isdir(frames_dir): # If not empty, but error occurred, log it. Manual cleanup might be needed.
+                    logger.warning(f"Frames directory {frames_dir} is not empty after error, manual cleanup may be required.")
+            except Exception as cleanup_e:
+                logger.error(f"Error during cleanup of frames directory {frames_dir}: {cleanup_e}")
