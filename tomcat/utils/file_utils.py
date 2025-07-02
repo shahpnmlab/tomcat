@@ -67,7 +67,7 @@ class FileLocator:
     # File extension definitions
     EXTENSIONS = {
         'tomogram': ['.mrc', '_rec.mrc', '.rec', '.rec.mrc', '_rec'],
-        'tiltseries': ['_ali.mrc', '.ali', '.st', '.st.mrc'],
+        'tiltseries': ['_preali.mrc', '_ali.mrc', '_aligned.mrc', '.st', '.st.mrc'],
         'lowmag': ['.mrc', '.dm4', '.tif', '.tiff', '.jpg', '.jpeg', '.png']
     }
 
