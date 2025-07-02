@@ -211,8 +211,10 @@
                         <tr data-tomo-name="{{ row['tomo_name'] }}" data-index="{{ index }}">
                             <td>
                                 <div class="thumbnail-container">
+                                    <!-- The check `row['tomo_name'] in thumbnails` still works because thumbnails is now a dict with tomo_name as key and True as value if available -->
                                     {% if row['tomo_name'] in thumbnails %}
-                                    <img src="{{ url_for('media.serve_thumbnail', filename=thumbnails[row['tomo_name']]) }}"
+                                    <!-- The URL generation now uses the new route and parameter -->
+                                    <img src="{{ url_for('media.serve_thumbnail', tomo_name=row['tomo_name']) }}"
                                          alt="{{ row['tomo_name'] }} thumbnail">
                                     {% else %}
                                     <div class="placeholder">

@@ -30,11 +30,8 @@ class Config:
         # App directories
         self.app_data_dir = os.path.join(self.base_dir, '.tomcat')
         self.upload_folder = os.path.join(self.app_data_dir, 'uploads')
-        self.thumbnails_folder = os.path.join(self.app_data_dir, 'thumbnails')
-        self.media_folder = os.path.join(self.app_data_dir, 'media')
-        self.lowmag_folder = os.path.join(self.media_folder, 'lowmag')
-        self.tiltseries_folder = os.path.join(self.media_folder, 'tiltseries')
-        self.tomogram_folder = os.path.join(self.media_folder, 'tomogram')
+        # NEW: Single media cache directory
+        self.media_cache_dir = os.path.join(self.app_data_dir, 'media_cache')
 
         # Config file path
         self.config_file = os.path.join(self.app_data_dir, 'config.json')
@@ -65,13 +62,8 @@ class Config:
         directories = [
             self.app_data_dir,
             self.upload_folder,
-            self.thumbnails_folder,
-            self.media_folder,
-            self.lowmag_folder,
-            self.tiltseries_folder,
-            self.tomogram_folder
+            self.media_cache_dir, # UPDATED
         ]
-
         for directory in directories:
             os.makedirs(directory, exist_ok=True)
             logger.debug(f"Ensured directory exists: {directory}")
@@ -140,11 +132,7 @@ class Config:
             'APP_NAME': self.app_name,
             'APP_DATA_DIR': self.app_data_dir,
             'LOCAL_UPLOAD_FOLDER': self.upload_folder,
-            'LOCAL_THUMBNAILS_FOLDER': self.thumbnails_folder,
-            'LOCAL_MEDIA_FOLDER': self.media_folder,
-            'LOWMAG_MEDIA_FOLDER': self.lowmag_folder,
-            'TILTSERIES_MEDIA_FOLDER': self.tiltseries_folder,
-            'TOMOGRAM_MEDIA_FOLDER': self.tomogram_folder,
+            'MEDIA_CACHE_DIR': self.media_cache_dir, # UPDATED
             'CONFIG_FILE': self.config_file,
             'PATHS': self.paths,
             'ALLOWED_EXTENSIONS': self.allowed_extensions

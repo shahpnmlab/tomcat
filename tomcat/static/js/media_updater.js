@@ -200,7 +200,8 @@ function updateThumbnail(tomoName, thumbnailPath) {
 
     // Update the image source with cache-busting
     const timestamp = new Date().getTime();
-    newImage.src = `/thumbnails/${thumbnailPath}?t=${timestamp}`;
+    // The URL is now constructed with the new route, thumbnailPath is tomoName
+    newImage.src = `/thumbnail/${thumbnailPath}?t=${timestamp}`;
 }
 
 /**

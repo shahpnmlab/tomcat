@@ -33,48 +33,26 @@ def initialize_routes(config, media_manager):
             tomo_name (str): Name of the tomogram
         """
         if media_type == 'lowmag':
-            media_folder = config.lowmag_folder
-            filename = f"{tomo_name}.jpg"
+            filename = "lowmag.jpg"
         elif media_type == 'tiltseries':
-            media_folder = config.tiltseries_folder
-            filename = f"{tomo_name}.gif"
+            filename = "tiltseries.gif"
         elif media_type == 'tomogram':
-            media_folder = config.tomogram_folder
-            filename = f"{tomo_name}.gif"
+            filename = "tomogram.gif"
         else:
             return "Invalid media type", 400
 
-        # Make sure directory exists
-        os.makedirs(media_folder, exist_ok=True)
+        media_dir = os.path.join(config.media_cache_dir, tomo_name)
+        file_path = os.path.join(media_dir, filename)
 
-        # Log the file path for debugging
-        file_path = os.path.join(media_folder, filename)
-        logger.info(f"Serving media from: {file_path}")
+        os.makedirs(media_dir, exist_ok=True)
 
-        # Check if file exists and has content
-        if not os.path.exists(file_path):
-            logger.info(f"File does not exist: {file_path}")
-            # Set as priority since user is explicitly requesting it
-            media_manager.queue_tomogram_for_processing(tomo_name, priority=True)
-            # Return a 202 Accepted response to indicate processing
-            return "", 202
-
-        if os.path.getsize(file_path) == 0:
-            logger.warning(f"File exists but is empty: {file_path}")
-            # Try to regenerate if the file is empty
-            os.remove(file_path)
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            if os.path.exists(file_path): # Remove if empty
+                os.remove(file_path)
             media_manager.queue_tomogram_for_processing(tomo_name, priority=True)
             return "", 202
 
-        logger.info(f"Serving file: {file_path}, size: {os.path.getsize(file_path)} bytes")
-
-        # Set appropriate content type for the response
-        if filename.endswith('.gif'):
-            return send_from_directory(media_folder, filename, mimetype='image/gif')
-        elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
-            return send_from_directory(media_folder, filename, mimetype='image/jpeg')
-        else:
-            return send_from_directory(media_folder, filename)
+        return send_from_directory(media_dir, filename)
 
     @media_bp.route('/media_status/<media_type>/<tomo_name>')
     def get_media_status(media_type, tomo_name):
@@ -88,15 +66,16 @@ def initialize_routes(config, media_manager):
         status = media_manager.get_media_status(media_type, tomo_name)
         return jsonify(status)
 
-    @media_bp.route('/thumbnails/<filename>')
-    def serve_thumbnail(filename):
+    @media_bp.route('/thumbnail/<tomo_name>') # Route changed from /thumbnails/<filename>
+    def serve_thumbnail(tomo_name): # Parameter changed from filename to tomo_name
         """
         Serve thumbnail files.
 
         Args:
-            filename (str): Name of the thumbnail file
+            tomo_name (str): Name of the tomogram (used to find thumbnail.jpg)
         """
-        return send_from_directory(config.thumbnails_folder, filename)
+        thumbnail_dir = os.path.join(config.media_cache_dir, tomo_name)
+        return send_from_directory(thumbnail_dir, "thumbnail.jpg")
 
     @media_bp.route('/thumbnail_status/<tomo_name>')
     def get_thumbnail_status(tomo_name):
@@ -106,15 +85,12 @@ def initialize_routes(config, media_manager):
         Args:
             tomo_name (str): Name of the tomogram
         """
-        thumbnail_path = media_manager.get_thumbnail_path(tomo_name)
-
-        if thumbnail_path:
-            return jsonify({
-                'available': True,
-                'path': os.path.basename(thumbnail_path)
-            })
+        thumbnail_path = os.path.join(config.media_cache_dir, tomo_name, "thumbnail.jpg")
+        if os.path.exists(thumbnail_path):
+            return jsonify({'available': True, 'path': tomo_name}) # 'path' is now tomo_name for URL construction
         else:
-            # Thumbnail not available yet, but has been queued for generation
+            # Ensure media_manager queues if not available
+            media_manager.get_thumbnail_path(tomo_name)
             return jsonify({'available': False})
 
     @media_bp.route('/thumbnail_progress')

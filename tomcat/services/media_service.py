@@ -162,18 +162,13 @@ class MediaManager:
         Args:
             tomo_name (str): Name of the tomogram
         """
-        # Check if thumbnail already exists
-        thumbnail_pattern = os.path.join(self.config.thumbnails_folder, f"{tomo_name}*.png")
-        thumbnail_files = glob.glob(thumbnail_pattern)
+        output_dir = os.path.join(self.config.media_cache_dir, tomo_name)
+        output_file = os.path.join(output_dir, "thumbnail.jpg") # Changed to jpg as per instructions
 
-        if not thumbnail_files:
-            # Find source file for thumbnail generation
+        if not os.path.exists(output_file):
             tomogram_file = self.file_locator.find_tomogram_file(tomo_name)
-
             if tomogram_file:
-                output_file = os.path.join(self.config.thumbnails_folder, f"{tomo_name}.png")
-
-                # Submit thumbnail generation task
+                os.makedirs(output_dir, exist_ok=True)
                 self.thread_manager.submit_task(
                     f"thumbnail_{tomo_name}",
                     self._generate_thumbnail,
@@ -188,18 +183,16 @@ class MediaManager:
         Args:
             tomo_name (str): Name of the tomogram
         """
-        # Check if lowmag image already exists
-        output_file = os.path.join(self.config.lowmag_folder, f"{tomo_name}.jpg")
+        output_dir = os.path.join(self.config.media_cache_dir, tomo_name)
+        output_file = os.path.join(output_dir, "lowmag.jpg")
 
         if not os.path.exists(output_file) and self.config.paths['lowmag_path']:
-            # Set status to generating
+            os.makedirs(output_dir, exist_ok=True)
             self.media_status[f"lowmag_{tomo_name}"] = "generating"
-
-            # Submit lowmag generation task
             self.thread_manager.submit_task(
                 f"lowmag_{tomo_name}",
                 self._generate_lowmag_image,
-                tomo_name
+                tomo_name, output_file
             )
             logger.info(f"Scheduled lowmag image generation for {tomo_name}")
 
@@ -210,18 +203,16 @@ class MediaManager:
         Args:
             tomo_name (str): Name of the tomogram
         """
-        # Check if tilt series animation already exists
-        output_file = os.path.join(self.config.tiltseries_folder, f"{tomo_name}.gif")
+        output_dir = os.path.join(self.config.media_cache_dir, tomo_name)
+        output_file = os.path.join(output_dir, "tiltseries.gif")
 
         if not os.path.exists(output_file) and self.config.paths['tiltseries_path']:
-            # Set status to generating
+            os.makedirs(output_dir, exist_ok=True)
             self.media_status[f"tiltseries_{tomo_name}"] = "generating"
-
-            # Submit tilt series generation task
             self.thread_manager.submit_task(
                 f"tiltseries_{tomo_name}",
                 self._generate_tiltseries_animation,
-                tomo_name
+                tomo_name, output_file
             )
             logger.info(f"Scheduled tilt series animation generation for {tomo_name}")
 
@@ -232,18 +223,16 @@ class MediaManager:
         Args:
             tomo_name (str): Name of the tomogram
         """
-        # Check if tomogram animation already exists
-        output_file = os.path.join(self.config.tomogram_folder, f"{tomo_name}.gif")
+        output_dir = os.path.join(self.config.media_cache_dir, tomo_name)
+        output_file = os.path.join(output_dir, "tomogram.gif")
 
         if not os.path.exists(output_file) and self.config.paths['tomogram_path']:
-            # Set status to generating
+            os.makedirs(output_dir, exist_ok=True)
             self.media_status[f"tomogram_{tomo_name}"] = "generating"
-
-            # Submit tomogram generation task
             self.thread_manager.submit_task(
                 f"tomogram_{tomo_name}",
                 self._generate_tomogram_animation,
-                tomo_name
+                tomo_name, output_file
             )
             logger.info(f"Scheduled tomogram animation generation for {tomo_name}")
 
@@ -303,7 +292,7 @@ class MediaManager:
             self.thumbnail_progress['message'] = f'Error: {str(e)}'
             return False
 
-    def _generate_lowmag_image(self, tomo_name):
+    def _generate_lowmag_image(self, tomo_name, output_file):
         """
         Generate a JPEG image from the lowmag MRC file for the given tomogram.
 
@@ -313,8 +302,6 @@ class MediaManager:
         Returns:
             bool: True if successful, False otherwise
         """
-        output_file = os.path.join(self.config.lowmag_folder, f"{tomo_name}.jpg")
-
         try:
             # Find the lowmag file
             lowmag_file = self.file_locator.find_lowmag_file(tomo_name)
@@ -351,7 +338,7 @@ class MediaManager:
                 os.remove(output_file)
             return False
 
-    def _generate_tiltseries_animation(self, tomo_name):
+    def _generate_tiltseries_animation(self, tomo_name, output_file):
         """
         Generate an animation from the tilt series MRC file for the given tomogram.
 
@@ -361,8 +348,6 @@ class MediaManager:
         Returns:
             bool: True if successful, False otherwise
         """
-        output_file = os.path.join(self.config.tiltseries_folder, f"{tomo_name}.gif")
-
         try:
             # Find the tilt series file
             tiltseries_file = self.file_locator.find_tiltseries_file(tomo_name)
@@ -408,7 +393,7 @@ class MediaManager:
                 os.remove(output_file)
             return False
 
-    def _generate_tomogram_animation(self, tomo_name):
+    def _generate_tomogram_animation(self, tomo_name, output_file):
         """
         Generate an animation from the tomogram MRC file for the given tomogram.
 
@@ -418,8 +403,6 @@ class MediaManager:
         Returns:
             bool: True if successful, False otherwise
         """
-        output_file = os.path.join(self.config.tomogram_folder, f"{tomo_name}.gif")
-
         try:
             # Find the tomogram file
             tomogram_file = self.file_locator.find_tomogram_file(tomo_name)
@@ -477,22 +460,18 @@ class MediaManager:
             dict: Status information
         """
         status_key = f"{media_type}_{tomo_name}"
+        media_dir = os.path.join(self.config.media_cache_dir, tomo_name)
 
-        # Determine the appropriate media folder based on type
         if media_type == 'lowmag':
-            media_folder = self.config.lowmag_folder
-            file_extension = '.jpg'
+            filename = 'lowmag.jpg'
         elif media_type == 'tiltseries':
-            media_folder = self.config.tiltseries_folder
-            file_extension = '.gif'
+            filename = 'tiltseries.gif'
         elif media_type == 'tomogram':
-            media_folder = self.config.tomogram_folder
-            file_extension = '.gif'
+            filename = 'tomogram.gif'
         else:
             return {"status": "error", "message": "Invalid media type"}
 
-        # Check if the media file exists
-        media_file = os.path.join(media_folder, f"{tomo_name}{file_extension}")
+        media_file = os.path.join(media_dir, filename)
 
         if os.path.exists(media_file) and os.path.getsize(media_file) > 0:
             # File exists and has content, it's ready
@@ -529,19 +508,12 @@ class MediaManager:
         Returns:
             str or None: Path to the thumbnail if found, None otherwise
         """
-        # Check cached paths first
-        if tomo_name in self.thumbnail_progress['thumbnail_paths']:
-            thumbnail_filename = self.thumbnail_progress['thumbnail_paths'][tomo_name]
-            return os.path.join(self.config.thumbnails_folder, thumbnail_filename)
+        thumbnail_path = os.path.join(self.config.media_cache_dir, tomo_name, "thumbnail.jpg") # Changed to jpg
+        if os.path.exists(thumbnail_path):
+            return thumbnail_path
 
-        # Use file locator to find thumbnail
-        thumbnail_path = self.file_locator.find_thumbnail(tomo_name, self.config.thumbnails_folder)
-
-        # If not found, queue for generation
-        if not thumbnail_path:
-            self.queue_tomogram_for_processing(tomo_name)
-
-        return thumbnail_path
+        self.queue_tomogram_for_processing(tomo_name)
+        return None
 
     def get_thumbnail_progress(self):
         """
