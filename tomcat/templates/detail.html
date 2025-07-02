@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ config.APP_NAME }} - Tomogram Details</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"> <!-- Make sure this is present -->
     <style>
+        /* ... existing styles ... */
         .image-container:hover {
         height: auto;
         min-height: 300px;
@@ -84,7 +86,7 @@
             color: #333;
             font-weight: 500;
         }
-        .loading-indicator {
+        .loading-indicator { /* This might be legacy, new viewer has its own spinner */
             position: absolute;
             top: 50%;
             left: 50%;
@@ -95,8 +97,38 @@
             font-weight: 500;
             margin-bottom: 5px;
         }
+        .interactive-viewer {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #fff;
+        }
+        .viewer-display {
+            width: 100%;
+            min-height: 300px; /* Ensure it has some height */
+            background-color: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative; /* For spinner positioning if needed */
+        }
+        .viewer-display img {
+            max-width: 100%;
+            max-height: 300px; /* Limit initial image height within display */
+            display: block;
+        }
+        .viewer-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .viewer-controls input[type="range"] {
+            flex-grow: 1;
+        }
     </style>
-    <script src="{{ url_for('static', filename='js/media_updater.js') }}"></script>
+    <!-- REMOVE old media_updater.js script if present, it's not needed on this page -->
+    <!-- <script src="{{ url_for('static', filename='js/media_updater.js') }}"></script> -->
 </head>
 <body>
     <div class="container mt-4 mb-5">
@@ -159,7 +191,7 @@
 
         <h3 class="section-title">Tomogram Data</h3>
         <div class="row">
-            <!-- Low Mag Overview Image -->
+            <!-- Low Mag Overview Image (unchanged) -->
             <div class="col-md-4">
                 <p class="image-label">Low Mag Overview</p>
                 <div class="image-container" id="lowmag-container">
@@ -169,8 +201,15 @@
                             <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
+                    <!-- This media-container structure is from the old media_updater.js,
+                         it might need to be adjusted if lowmag also becomes interactive,
+                         or if media_updater.js is fully removed and its functionality for lowmag isn't replaced.
+                         For now, leaving as is, assuming lowmag might still use old mechanism or is static. -->
                     <div class="media-container" data-media-type="lowmag" data-tomo-name="{{ tomo_name }}">
-                        <div class="text-center">Loading low magnification image...</div>
+                         <img src="{{ url_for('media.serve_media', media_type='lowmag', tomo_name=tomo_name) }}"
+                              alt="{{ tomo_name }} Low Mag"
+                              onerror="this.parentElement.innerHTML='<div class=\'placeholder\'><p>Error loading lowmag.</p></div>'; document.getElementById('lowmag-loading').style.display='none';"
+                              onload="document.getElementById('lowmag-loading').style.display='none';">
                     </div>
                     {% else %}
                     <div class="placeholder">
@@ -180,45 +219,31 @@
                 </div>
             </div>
 
-            <!-- Tilt Series Animation -->
+            <!-- Tilt Series Animation (REPLACE THIS SECTION) -->
             <div class="col-md-4">
                 <p class="image-label">Tilt Series</p>
-                <div class="image-container" id="tiltseries-container">
-                    {% if tiltseries_path %}
-                    <div class="loading-indicator" id="tiltseries-loading">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
+                <div class="interactive-viewer" data-media-type="tiltseries" data-tomo-name="{{ tomo_name }}">
+                    <div class="viewer-display"><div class="spinner-border text-primary"></div></div>
+                    <div class="viewer-controls" style="display:none;">
+                        <button class="btn btn-sm btn-outline-secondary play-btn"><i class="bi bi-play-fill"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary pause-btn" style="display:none;"><i class="bi bi-pause-fill"></i></button>
+                        <input type="range" class="form-range" min="0" max="100" value="0">
+                        <span class="badge bg-secondary angle-display"></span>
                     </div>
-                    <div class="media-container" data-media-type="tiltseries" data-tomo-name="{{ tomo_name }}">
-                        <div class="text-center">Loading tilt series animation...</div>
-                    </div>
-                    {% else %}
-                    <div class="placeholder">
-                        <p>No tilt series path configured</p>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
 
-            <!-- Tomogram Animation -->
+            <!-- Tomogram Animation (REPLACE THIS SECTION) -->
             <div class="col-md-4">
                 <p class="image-label">Tomogram</p>
-                <div class="image-container" id="tomogram-container">
-                    {% if tomogram_path %}
-                    <div class="loading-indicator" id="tomogram-loading">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
+                <div class="interactive-viewer" data-media-type="tomogram" data-tomo-name="{{ tomo_name }}">
+                    <div class="viewer-display"><div class="spinner-border text-primary"></div></div>
+                    <div class="viewer-controls" style="display:none;">
+                        <button class="btn btn-sm btn-outline-secondary play-btn"><i class="bi bi-play-fill"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary pause-btn" style="display:none;"><i class="bi bi-pause-fill"></i></button>
+                        <input type="range" class="form-range" min="0" max="100" value="0">
+                        <span class="badge bg-secondary slice-display"></span>
                     </div>
-                    <div class="media-container" data-media-type="tomogram" data-tomo-name="{{ tomo_name }}">
-                        <div class="text-center">Loading tomogram animation...</div>
-                    </div>
-                    {% else %}
-                    <div class="placeholder">
-                        <p>No tomogram path configured</p>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -249,102 +274,142 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Manually check and hide loading indicators for already loaded images
-        function checkLoadedImages() {
-            // Check tilt series image
-            var tiltSeriesImg = document.querySelector('#tiltseries-container img');
-            if (tiltSeriesImg && tiltSeriesImg.complete) {
-                document.getElementById('tiltseries-loading').style.display = 'none';
-            }
+    <!-- NEW SCRIPT BLOCK FOR THE VIEWER -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.interactive-viewer').forEach(initViewer);
 
-            // Check tomogram image
-            var tomogramImg = document.querySelector('#tomogram-container img');
-            if (tomogramImg && tomogramImg.complete) {
-                document.getElementById('tomogram-loading').style.display = 'none';
-            }
-
-            // Check lowmag image
-            var lowmagImg = document.querySelector('#lowmag-container img');
-            if (lowmagImg && lowmagImg.complete) {
-                document.getElementById('lowmag-loading').style.display = 'none';
+        // Handle the static low-mag image loading indicator, if it's still separate
+        const lowmagImg = document.querySelector('#lowmag-container img');
+        const lowmagLoading = document.getElementById('lowmag-loading');
+        if (lowmagImg && lowmagLoading) {
+            if (lowmagImg.complete) {
+                lowmagLoading.style.display = 'none';
+            } else {
+                lowmagImg.onload = () => { lowmagLoading.style.display = 'none'; };
+                lowmagImg.onerror = () => {
+                    lowmagLoading.style.display = 'none';
+                    // Optionally update the parent of lowmagImg to show an error message
+                    const lowmagContainer = document.getElementById('lowmag-container');
+                    if(lowmagContainer) lowmagContainer.innerHTML = '<div class="placeholder"><p>Error loading low-mag image.</p></div>';
+                };
             }
         }
-
-        // First check immediately
-        checkLoadedImages();
-
-        // Then check again after a delay to catch any images that loaded quickly
-        setTimeout(checkLoadedImages, 1000);
     });
 
-    // Function to handle image loading errors
-    function handleImageError(img, loadingId, message) {
-        // Hide the loading spinner
-        document.getElementById(loadingId).style.display = 'none';
+    function initViewer(viewerElement) {
+        const mediaType = viewerElement.dataset.mediaType;
+        const tomoName = viewerElement.dataset.tomoName;
+        const display = viewerElement.querySelector('.viewer-display');
+        const controls = viewerElement.querySelector('.viewer-controls');
+        const slider = viewerElement.querySelector('input[type="range"]');
+        const playBtn = viewerElement.querySelector('.play-btn');
+        const pauseBtn = viewerElement.querySelector('.pause-btn');
+        const metadataDisplay = viewerElement.querySelector('.angle-display, .slice-display');
 
-        // Replace the img with a placeholder
-        const parent = img.parentNode;
-        const placeholder = document.createElement('div');
-        placeholder.className = 'placeholder';
-        placeholder.innerHTML = `<p>${message}</p>`;
+        let frames = [];
+        let metadata = {}; // Store all metadata, including tilt_angles if present
+        let playInterval = null;
+        const FPS = 10; // Frames per second for playback
 
-        // Add a small refresh button to try again
-        const refreshBtn = document.createElement('button');
-        refreshBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
-        refreshBtn.innerHTML = 'Refresh';
-        refreshBtn.onclick = function() {
-            location.reload();
+        const updateImageAndMetadata = (frameIndex) => {
+            if (frames && frames[frameIndex]) {
+                const imgElement = display.querySelector('img');
+                if (imgElement) {
+                    imgElement.src = frames[frameIndex];
+                } else { // If no img, create it (first load)
+                    display.innerHTML = `<img src="${frames[frameIndex]}" alt="${tomoName} ${mediaType} frame ${frameIndex + 1}">`;
+                }
+            }
+
+            if (!metadataDisplay) return;
+
+            if (mediaType === 'tiltseries' && metadata.tilt_angles && metadata.tilt_angles[frameIndex] !== null && metadata.tilt_angles[frameIndex] !== undefined) {
+                metadataDisplay.textContent = `${metadata.tilt_angles[frameIndex]}°`;
+                metadataDisplay.style.display = 'inline-block';
+            } else if (mediaType === 'tomogram') {
+                metadataDisplay.textContent = `Slice ${frameIndex + 1}`;
+                metadataDisplay.style.display = 'inline-block';
+            } else {
+                metadataDisplay.style.display = 'none'; // Hide if no relevant metadata
+            }
         };
-        placeholder.appendChild(refreshBtn);
 
-        // Remove the img and add the placeholder
-        parent.removeChild(img);
-        parent.appendChild(placeholder);
-    }
+        const stopPlayback = () => {
+            clearInterval(playInterval);
+            playInterval = null;
+            if(playBtn) playBtn.style.display = 'inline-block';
+            if(pauseBtn) pauseBtn.style.display = 'none';
+        };
 
-    // Add direct onclick handlers to the loading spinners
-    document.addEventListener('DOMContentLoaded', function() {
-        var loadingElements = document.querySelectorAll('.loading-indicator');
-        loadingElements.forEach(function(el) {
-            el.onclick = function() {
-                this.style.display = 'none';
-            };
-        });
-    });
+        function setupViewerControls(data) {
+            frames = data.frames;
+            metadata = data.metadata || {}; // Ensure metadata is an object
 
-    // Check media status and reload if necessary
-    function checkMediaStatus() {
-        const mediaTypes = ['lowmag', 'tiltseries', 'tomogram'];
-        const tomoName = '{{ tomo_name }}';
+            if (!frames || frames.length === 0) {
+                display.innerHTML = `<div class="alert alert-warning p-2 small">No frames available for this media.</div>`;
+                controls.style.display = 'none';
+                return;
+            }
 
-        mediaTypes.forEach(type => {
-            fetch(`/media_status/${type}/${tomoName}`)
-                .then(response => response.json())
+            // Initial image display
+            display.innerHTML = `<img src="${frames[0]}" alt="${tomoName} ${mediaType} frame 1">`;
+            controls.style.display = 'flex';
+
+            slider.max = frames.length - 1;
+            slider.value = 0;
+            updateImageAndMetadata(0); // Update metadata for the first frame
+
+            slider.addEventListener('input', () => {
+                stopPlayback();
+                updateImageAndMetadata(parseInt(slider.value, 10));
+            });
+
+            if(playBtn) {
+                playBtn.addEventListener('click', () => {
+                    playBtn.style.display = 'none';
+                    if(pauseBtn) pauseBtn.style.display = 'inline-block';
+                    playInterval = setInterval(() => {
+                        let nextValue = parseInt(slider.value, 10) + 1;
+                        if (nextValue >= frames.length) {
+                            nextValue = 0; // Loop
+                        }
+                        slider.value = nextValue;
+                        updateImageAndMetadata(nextValue);
+                    }, 1000 / FPS);
+                });
+            }
+
+            if(pauseBtn) pauseBtn.addEventListener('click', stopPlayback);
+        }
+
+        function pollData() {
+            fetch(`/interactive_data/${mediaType}/${tomoName}`)
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    return res.json();
+                })
                 .then(data => {
                     if (data.status === 'ready') {
-                        // Once ready, hide the loading spinner
-                        var loadingElement = document.getElementById(`${type}-loading`);
-                        if (loadingElement) {
-                            loadingElement.style.display = 'none';
-                        }
-
-                        // If we need to reload, do so
-                        if (data.reload) {
-                            const container = document.getElementById(`${type}-container`);
-                            if (container && container.querySelector('.placeholder')) {
-                                location.reload();
-                            }
-                        }
+                        setupViewerControls(data);
+                    } else if (data.status === 'generating') {
+                        display.innerHTML = `<div class="spinner-border text-primary" role="status"></div> <span class="ms-2">Generating frames...</span>`;
+                        setTimeout(pollData, 3000); // Poll again
+                    } else {
+                        display.innerHTML = `<div class="alert alert-warning p-2 small">${data.message || 'Could not load media.'}</div>`;
+                        controls.style.display = 'none';
                     }
-                })
-                .catch(error => console.error(`Error checking ${type} status:`, error));
-        });
-    }
+                }).catch(err => {
+                    console.error(`Failed to fetch interactive data for ${mediaType} ${tomoName}:`, err);
+                    display.innerHTML = '<div class="alert alert-danger p-2 small">Failed to fetch media data. Please try refreshing.</div>';
+                    controls.style.display = 'none';
+                });
+        }
 
-    // Check media status every 2 seconds
-    setInterval(checkMediaStatus, 2000);
-</script>
+        pollData(); // Start the process
+    }
+    </script>
 </body>
 </html>
