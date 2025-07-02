@@ -474,29 +474,24 @@ class MediaManager:
         media_file = os.path.join(media_dir, filename)
 
         if os.path.exists(media_file) and os.path.getsize(media_file) > 0:
-            # File exists and has content, it's ready
-            logger.debug(f"Media file is ready: {media_file}")
             return {
                 "status": "ready",
-                "reload": self.media_status.get(status_key) == "generating",  # Reload if we were previously generating
+                "reload": self.media_status.get(status_key) == "generating",
                 "size": os.path.getsize(media_file)
             }
 
-        # Check the status
         status = self.media_status.get(status_key, "unknown")
 
-        # If status is unknown but the file should be generating, update status and queue it
-        if status == "unknown" and not os.path.exists(media_file):
+        # If status is unknown, it's not being generated yet. Queue it.
+        # This ensures that if a file is requested and doesn't exist, its generation is (re)attempted.
+        if status == "unknown":
+            logger.info(f"Media {media_type} for {tomo_name} not found and status unknown. Queuing for generation.")
+            self.queue_tomogram_for_processing(tomo_name, priority=True)
+            # Update status immediately to prevent re-queueing in very short succession by multiple requests
             self.media_status[status_key] = "generating"
-            self.queue_tomogram_for_processing(tomo_name, priority=True)  # Priority since user is requesting it
-            status = "generating"
+            status = "generating" # Reflect that it's now being generated
 
-        return {
-            "status": status,
-            "reload": False,
-            "file_exists": os.path.exists(media_file),
-            "file_size": os.path.getsize(media_file) if os.path.exists(media_file) else 0
-        }
+        return {"status": status, "reload": False} # No need for file_exists/file_size here, handled by "ready"
 
     def get_thumbnail_path(self, tomo_name):
         """
