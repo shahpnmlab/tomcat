@@ -254,6 +254,101 @@ def generate_jpeg_thumbnail(source_file, output_file, min_side=150):
             except:
                 pass
 
+def parse_tilt_angles(tlt_file):
+    """Parses a .tlt or .rawtlt file and returns a list of angles."""
+    if not tlt_file or not os.path.exists(tlt_file):
+        return None
+    try:
+        angles = []
+        with open(tlt_file, 'r') as f:
+            for line in f:
+                try:
+                    # Attempt to convert each line to a float, skipping if it fails
+                    angles.append(float(line.strip()))
+                except (ValueError, TypeError):
+                    continue # Ignore non-numeric lines
+        return angles
+    except Exception as e:
+        logger.error(f"Could not parse tilt file {tlt_file}: {e}")
+        return None
+
+def generate_frames_from_mrc(source_file, output_dir, media_type, max_frames=200):
+    """
+    Generates individual JPEG frames from an MRC file into a directory.
+    Returns the number of frames generated.
+    """
+    try:
+        validate_mrc_file(source_file) # Validator is already in this file
+        with mrcfile.open(source_file, permissive=True) as mrc:
+            data = mrc.data
+            if data is None or (hasattr(data, 'size') and data.size == 0):
+                logger.error(f"MRC data is None or empty for {source_file}")
+                return 0
+            if len(data.shape) != 3:
+                # If not 3D, perhaps it's a single 2D image. Log and try to process as one frame.
+                if len(data.shape) == 2:
+                    logger.warning(f"Expected 3D data for frame generation, got 2D. Processing as single frame: {source_file}")
+                    num_slices = 1
+                    slice_data_is_2d = True
+                else:
+                    raise MediaProcessingError(f"Expected 3D data for frame generation, got {len(data.shape)}D data. Shape: {data.shape}")
+            else:
+                num_slices = data.shape[0]
+                slice_data_is_2d = False
+
+            if num_slices == 0:
+                logger.warning(f"No slices found in MRC file: {source_file}")
+                return 0
+
+            step = max(1, num_slices // max_frames if num_slices > 1 else 1) # Ensure step is at least 1
+
+            frame_count = 0
+            os.makedirs(output_dir, exist_ok=True) # Ensure output directory exists
+
+            for i in range(0, num_slices, step):
+                if slice_data_is_2d: # Handle the 2D as single slice case
+                    slice_data = data
+                else:
+                    slice_data = data[i]
+
+                # Use the correct normalization function based on media type
+                if media_type == 'tiltseries':
+                    normalized = normalize_tiltseries_data(slice_data)
+                else: # Default to tomogram normalization for 'tomogram' or other types
+                    normalized = normalize_tomogram_data(slice_data)
+
+                # Convert to an 8-bit grayscale image
+                img = Image.fromarray(normalized).convert('L')
+
+                # Save as a high-quality JPEG
+                frame_path = os.path.join(output_dir, f"{frame_count}.jpg")
+                img.save(frame_path, 'JPEG', quality=90)
+                frame_count += 1
+                if slice_data_is_2d: # If it was a single 2D image, break after one frame
+                    break
+            return frame_count
+    except MediaProcessingError as e: # Catch specific media processing errors
+        logger.error(f"MediaProcessingError while generating frames from {source_file}: {e}")
+        # Clean up any partial frames
+        if os.path.isdir(output_dir):
+            for f_name in os.listdir(output_dir):
+                try:
+                    os.remove(os.path.join(output_dir, f_name))
+                except OSError:
+                    pass # Ignore if file is already gone or other issues
+        return 0
+    except Exception as e:
+        logger.error(f"Failed to generate frames from {source_file}: {e}")
+        logger.debug(get_traceback_str()) # Log full traceback for unexpected errors
+        # Clean up any partial frames
+        if os.path.isdir(output_dir):
+            for f_name in os.listdir(output_dir):
+                try:
+                    os.remove(os.path.join(output_dir, f_name))
+                except OSError:
+                    pass
+        return 0
+
 def _generate_thumbnail_from_image(source_file, output_file, min_side):
     """Helper function to generate thumbnail from standard image formats."""
     try:

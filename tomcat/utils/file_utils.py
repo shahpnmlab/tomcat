@@ -255,3 +255,32 @@ class FileLocator:
                             }
         # Convert dictionary to list for return
         return list(results_dict.values())
+
+    def find_tilt_angle_file(self, tomo_name):
+        """
+        Finds the tilt angle file (.tlt or .rawtlt) for a tomogram.
+        Searches in both the tiltseries and tomogram source paths.
+        """
+        # Define the possible extensions for tilt angle files
+        tilt_exts = ['.rawtlt', '.tlt']
+
+        # Check in the configured tiltseries path first
+        tiltseries_path = self.config.paths.get('tiltseries_path')
+        if tiltseries_path and os.path.isdir(tiltseries_path):
+            for ext in tilt_exts:
+                file_path = os.path.join(tiltseries_path, f"{tomo_name}{ext}")
+                if os.path.exists(file_path):
+                    logger.info(f"Found tilt angle file: {file_path}")
+                    return file_path
+
+        # As a fallback, check the tomogram path
+        tomogram_path = self.config.paths.get('tomogram_path')
+        if tomogram_path and os.path.isdir(tomogram_path):
+            for ext in tilt_exts:
+                file_path = os.path.join(tomogram_path, f"{tomo_name}{ext}")
+                if os.path.exists(file_path):
+                    logger.info(f"Found tilt angle file in tomogram dir: {file_path}")
+                    return file_path
+
+        logger.warning(f"No tilt angle file found for {tomo_name}")
+        return None
