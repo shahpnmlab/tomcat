@@ -27,9 +27,9 @@ def initialize_routes(config, media_manager):
         if media_type == 'lowmag':
             filename, mimetype = "lowmag.jpg", 'image/jpeg'
         elif media_type == 'tiltseries':
-            filename, mimetype = "tiltseries.gif", 'image/gif'
+            filename, mimetype = "tiltseries.jpg", 'image/jpeg'
         elif media_type == 'tomogram':
-            filename, mimetype = "tomogram.gif", 'image/gif'
+            filename, mimetype = "tomogram.jpg", 'image/jpeg'
         else:
             return "Invalid media type", 400
         file_path = os.path.join(media_dir, filename)
