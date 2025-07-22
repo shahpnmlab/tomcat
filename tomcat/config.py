@@ -44,7 +44,6 @@ class Config:
             'lowmag_path': '',
             'tiltseries_path': '',
             'tomogram_path': '',
-            'notes_path': self.base_dir  # Default to base directory
         }
 
         # Actual paths (initialized with defaults, will be updated from config file)

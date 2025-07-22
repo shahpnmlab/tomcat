@@ -32,8 +32,7 @@ def initialize_routes(config):
             config.update_paths(
                 lowmag_path=request.form.get('lowmag_path', ''),
                 tiltseries_path=request.form.get('tiltseries_path', ''),
-                tomogram_path=request.form.get('tomogram_path', ''),
-                notes_path=request.form.get('notes_path', config.base_dir)
+                tomogram_path=request.form.get('tomogram_path', '')
             )
 
             flash('Settings updated successfully')

@@ -94,18 +94,8 @@ class Session:
             return False
 
         try:
-            # Save to the session file
+            # Save the session dataframe to its designated filepath
             self._df.to_csv(self.filepath, index=False)
-
-            # If notes path is configured, save a copy there too
-            if self.config.paths['notes_path']:
-                notes_filepath = os.path.join(self.config.paths['notes_path'], os.path.basename(self.filepath))
-                try:
-                    self._df.to_csv(notes_filepath, index=False)
-                    logger.info(f"Saved copy to {notes_filepath}")
-                except Exception as e:
-                    logger.error(f"Error saving to notes path: {str(e)}")
-
             logger.info(f"Saved session to {self.filepath}")
             return True
 

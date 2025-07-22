@@ -88,16 +88,6 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="notes_path" class="form-label">Notes Save Path:</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="notes_path" name="notes_path"
-                                   value="{{ paths.notes_path }}">
-                            <button type="button" class="btn btn-outline-secondary"
-                                    onclick="openFileBrowser('notes_path')">Browse</button>
-                        </div>
-                    </div>
-
                     <div class="d-flex justify-content-between">
                         <button type="submit" class="btn btn-primary">Save Settings</button>
                         <a href="{{ url_for('upload_file') }}" class="btn btn-secondary">Cancel</a>
@@ -148,7 +138,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Global variables
-        let currentPath = '{{ paths.notes_path }}'; // Initialize with notes_path from server
+        let currentPath = '{{ paths.tomogram_path or "/" }}'; // Initialize with tomogram_path or root
         let currentTarget = null;
         const fileBrowserModal = new bootstrap.Modal(document.getElementById('fileBrowserModal'));
 
@@ -161,16 +151,8 @@
             if (inputElement.value && inputElement.value.trim() !== '') {
                 currentPath = inputElement.value;
             } else {
-                // Use a default path based on which field we're setting
-                if (targetId === 'notes_path') {
-                    currentPath = '{{ paths.notes_path }}';
-                } else if (targetId === 'lowmag_path') {
-                    currentPath = '{{ paths.lowmag_path }}' || '{{ paths.notes_path }}';
-                } else if (targetId === 'tiltseries_path') {
-                    currentPath = '{{ paths.tiltseries_path }}' || '{{ paths.notes_path }}';
-                } else if (targetId === 'tomogram_path') {
-                    currentPath = '{{ paths.tomogram_path }}' || '{{ paths.notes_path }}';
-                }
+                // Use a default path, e.g. the tomogram path or root if not set
+                currentPath = '{{ paths.tomogram_path or "/" }}';
             }
 
             // Initialize the browser with current path
@@ -253,9 +235,9 @@
                 </div>`;
 
                 // If path is invalid, try to reset to a working path
-                if (path !== '{{ paths.notes_path }}' && path !== '{{ CURRENT_DIR }}') {
+                if (path !== ('{{ paths.tomogram_path or "/" }}') && path !== '/') {
                     setTimeout(() => {
-                        currentPath = '{{ paths.notes_path }}';
+                        currentPath = '{{ paths.tomogram_path or "/" }}';
                         document.getElementById('current_path').value = currentPath;
                         browsePath(currentPath);
                     }, 3000);
