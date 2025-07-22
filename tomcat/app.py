@@ -69,6 +69,9 @@ def create_app():
     # Configure Flask app with our settings
     app.config.update(config.get_flask_config())
 
+    # Make the 'min' function available in templates
+    app.jinja_env.globals['min'] = min
+
     # Helper function to check if a file is allowed
     def allowed_file(filename):
         """Check if a filename has an allowed extension."""

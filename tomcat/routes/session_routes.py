@@ -246,10 +246,13 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
             return redirect(url_for('session.upload_file'))
 
         df = session.get_data()
+        full_df = df.copy()  # Keep a copy of the original data
         search_results = None
         added_count = 0
         skipped_count = 0
-        search_notes = ""
+        
+        # Unify search query handling from GET (for pagination) and POST (for new search)
+        notes_query = request.values.get('notes_query', '').strip()
 
         # Handle form submission for adding entries (before pagination)
         if request.method == 'POST':
@@ -259,7 +262,7 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
             # For now, we assume JS will prevent default and call start_search.
 
             # Check if the user is manually adding a new entry
-            if 'add_new_entry' in request.form: # This part remains
+            if 'add_new_entry' in request.form:
                 new_tomo_name = request.form.get('new_tomo_name', '').strip()
                 if new_tomo_name:
                     if session.add_tomogram(new_tomo_name):
@@ -267,15 +270,17 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
                         return redirect(url_for('session.process_csv', filename=filename)) # Redirect to refresh
                     else:
                         flash(f"Tomogram '{new_tomo_name}' already exists")
+            
+            # If a new search is submitted via POST, redirect to a GET request to make the URL shareable
+            if 'search_notes' in request.form:
+                return redirect(url_for('session.process_csv', filename=filename, notes_query=notes_query))
 
         # Handle notes search
-        if 'search_notes' in request.form:
-            search_notes = request.form.get('notes_query', '').strip().lower()
-            if search_notes:
-                df['notes_str'] = df['notes'].fillna('').astype(str)
-                df = df[df['notes_str'].str.lower().str.contains(search_notes)].drop(columns=['notes_str'])
-                if len(df) == 0:
-                    flash(f"No tomograms found with notes containing '{search_notes}'")
+        if notes_query:
+            df['notes_str'] = df['notes'].fillna('').astype(str)
+            df = df[df['notes_str'].str.lower().str.contains(notes_query.lower())].drop(columns=['notes_str'])
+            if len(df) == 0:
+                flash(f"No tomograms found with notes containing '{notes_query}'")
 
         # --- PAGINATION LOGIC ---
         page = request.args.get('page', 1, type=int)
@@ -287,6 +292,20 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
         end_index = start_index + per_page
 
         paginated_df = df.iloc[start_index:end_index]
+        
+        # --- Generate page numbers for navigation ---
+        iter_pages = None
+        if total_pages > 1:
+            iter_pages = []
+            # Show first page, last page, and pages around current page
+            pages_to_show = set([1, page - 2, page - 1, page, page + 1, page + 2, total_pages])
+            last_p = 0
+            for p in sorted(list(pages_to_show)):
+                if p > 0 and p <= total_pages:
+                    if last_p > 0 and last_p + 1 != p:
+                        iter_pages.append(None)  # Ellipsis
+                    iter_pages.append(p)
+                    last_p = p
         # --- END PAGINATION LOGIC ---
 
         tomo_names = paginated_df['tomo_name'].tolist()
@@ -301,6 +320,7 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
 
         return render_template('form.html',
                                df=paginated_df,
+                               full_df=full_df, # Pass full dataframe for context
                                filename=filename,
                                paths=config.paths,
                                thumbnails=thumbnails,
@@ -308,12 +328,13 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
                                search_results=search_results,
                                added_count=added_count,
                                skipped_count=skipped_count,
-                               search_notes=search_notes,
+                               search_notes=notes_query,
                                pagination={
                                    'page': page,
                                    'per_page': per_page,
                                    'total_pages': total_pages,
-                                   'total_rows': total_rows
+                                   'total_rows': total_rows,
+                                   'iter_pages': iter_pages
                                })
 
 
