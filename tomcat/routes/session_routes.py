@@ -7,6 +7,8 @@ including session creation, viewing, editing, and downloading.
 import json
 import os
 import logging
+import shutil
+import subprocess
 import tarfile
 import tempfile
 from datetime import datetime
@@ -85,17 +87,13 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
             sessions = session_manager.get_sessions()
             sessions_exist = len(sessions) > 0
 
-            # If no paths are set, redirect to settings
-            if not any(config.paths.values()):
-                flash("Please configure data paths before continuing")
-                return redirect(url_for('settings.settings'))
-
-            # Display the upload page with sessions
+            # Display the upload page with sessions (paths may not be set yet — that's fine)
             return render_template('upload.html',
                                 paths=config.paths,
                                 sessions=sessions,
                                 config_exists=config_exists,
-                                sessions_exist=sessions_exist)
+                                sessions_exist=sessions_exist,
+                                paths_configured=any(config.paths.values()))
 
         # Handle direct upload if POST
         if 'file' in request.files:
@@ -416,6 +414,52 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
     def download_csv(filename):
         """Download session file."""
         return send_from_directory(config.upload_folder, filename, as_attachment=True)
+
+    @session_bp.route('/check_3dmod')
+    def check_3dmod():
+        """Return whether 3dmod is available on PATH."""
+        available = shutil.which('3dmod') is not None
+        return jsonify({'available': available})
+
+    @session_bp.route('/launch_3dmod/<media_type>/<tomo_name>', methods=['POST'])
+    def launch_3dmod(media_type, tomo_name):
+        """
+        Launch 3dmod for the raw source file of the given tomogram / media type.
+
+        media_type: 'lowmag' | 'tiltseries' | 'tomogram'
+        """
+        if shutil.which('3dmod') is None:
+            return jsonify({'status': 'error', 'message': '3dmod not found on PATH'}), 404
+
+        # Resolve the actual source file using FileLocator
+        if media_type == 'lowmag':
+            file_path = file_locator.find_lowmag_file(tomo_name)
+            cmd = ['3dmod', '-b', '2', file_path]
+        elif media_type == 'tiltseries':
+            file_path = file_locator.find_tiltseries_file(tomo_name)
+            cmd = ['3dmod', file_path]
+        elif media_type == 'tomogram':
+            file_path = file_locator.find_tomogram_file(tomo_name)
+            cmd = ['3dmod', '-xyz', file_path]
+        else:
+            return jsonify({'status': 'error', 'message': f'Unknown media type: {media_type}'}), 400
+
+        if not file_path:
+            return jsonify({'status': 'error', 'message': f'Source file not found for {tomo_name}'}), 404
+
+        try:
+            # Launch detached — do not wait for the process to finish
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            logger.info(f"Launched 3dmod for {media_type}/{tomo_name}: {' '.join(cmd)}")
+            return jsonify({'status': 'ok', 'command': ' '.join(cmd)})
+        except Exception as e:
+            logger.error(f"Failed to launch 3dmod: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
 
     @session_bp.route('/export_session/<filename>', methods=['GET'])
     def export_session(filename):

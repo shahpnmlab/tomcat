@@ -61,6 +61,13 @@
             {% endif %}
             {% endwith %}
 
+            {% if not paths_configured %}
+            <div class="alert alert-warning d-flex align-items-center justify-content-between">
+                <span>Data paths are not yet configured.</span>
+                <a href="{{ url_for('settings.settings') }}" class="btn btn-warning btn-sm ms-3">Configure Paths</a>
+            </div>
+            {% endif %}
+
             {% if config_exists and sessions_exist %}
             <div class="alert alert-info">
                 <p>You have existing TomCat sessions. You can continue working with these sessions or start fresh.</p>

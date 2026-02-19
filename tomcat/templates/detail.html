@@ -7,14 +7,15 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
     <style>
         .image-container:hover {
-        height: auto;
-        min-height: 300px;
-        width: 100%;  /* Keep original width */
-        position: relative;
-        z-index: 100;
-        background-color: white;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
+            height: auto;
+            min-height: 300px;
+            width: 100%;
+            position: relative;
+            z-index: 100;
+            overflow: visible;
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
 
         .image-container {
             position: relative;
@@ -100,6 +101,25 @@
         .detail-star { font-size: 1.5rem; color: #ccc; transition: color 0.15s; line-height: 1; }
         .detail-star.filled { color: #f5a623; }
         .detail-star.hover { color: #f5a623; }
+        /* 3dmod launch button — positioned inside .image-container */
+        .viewer-col { position: relative; }
+        .btn-3dmod {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            z-index: 200;   /* above .image-container:hover z-index:100 */
+            padding: 2px;
+            border: none;
+            background: rgba(255,255,255,0.75);
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0.9;
+            transition: opacity 0.15s, transform 0.15s;
+            line-height: 0;
+        }
+        .btn-3dmod:hover:not(:disabled) { opacity: 1; transform: scale(1.15); background: rgba(255,255,255,0.95); }
+        .btn-3dmod:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-3dmod img { width: 28px; height: 28px; display: block; }
         /* GIF player controls */
         .gif-player-controls {
             display: flex;
@@ -226,10 +246,15 @@
         <h3 class="section-title">Tomogram Data</h3>
         <div class="row">
             <!-- Low Mag Overview Image -->
-            <div class="col-md-4">
+            <div class="col-md-4 viewer-col">
                 <p class="image-label">Low Mag Overview</p>
                 <div class="image-container" id="lowmag-container">
                     {% if lowmag_path %}
+                    <button class="btn-3dmod" id="btn-3dmod-lowmag" disabled
+                            data-media-type="lowmag" data-tomo-name="{{ tomo_name }}"
+                            title="Open in 3dmod">
+                        <img src="{{ url_for('static', filename='img/3dmod_inactive.png') }}" alt="3dmod">
+                    </button>
                     <div class="loading-indicator" id="lowmag-loading">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
@@ -247,10 +272,15 @@
             </div>
 
             <!-- Tilt Series Animation -->
-            <div class="col-md-4">
+            <div class="col-md-4 viewer-col">
                 <p class="image-label">Tilt Series</p>
                 <div class="image-container" id="tiltseries-container">
                     {% if tiltseries_path %}
+                    <button class="btn-3dmod" id="btn-3dmod-tiltseries" disabled
+                            data-media-type="tiltseries" data-tomo-name="{{ tomo_name }}"
+                            title="Open in 3dmod">
+                        <img src="{{ url_for('static', filename='img/3dmod_inactive.png') }}" alt="3dmod">
+                    </button>
                     <div class="loading-indicator" id="tiltseries-loading">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
@@ -268,10 +298,15 @@
             </div>
 
             <!-- Tomogram Animation -->
-            <div class="col-md-4">
+            <div class="col-md-4 viewer-col">
                 <p class="image-label">Tomogram</p>
                 <div class="image-container" id="tomogram-container">
                     {% if tomogram_path %}
+                    <button class="btn-3dmod" id="btn-3dmod-tomogram" disabled
+                            data-media-type="tomogram" data-tomo-name="{{ tomo_name }}"
+                            title="Open in 3dmod">
+                        <img src="{{ url_for('static', filename='img/3dmod_inactive.png') }}" alt="3dmod">
+                    </button>
                     <div class="loading-indicator" id="tomogram-loading">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
@@ -459,6 +494,65 @@
         });
         star.addEventListener('mouseleave', () => {
             stars.forEach(s => s.classList.remove('hover'));
+        });
+    });
+})();
+</script>
+
+<script>
+// ===== 3dmod launcher =====
+(function() {
+    const activeIcon   = "{{ url_for('static', filename='img/3dmod_active.png') }}";
+    const inactiveIcon = "{{ url_for('static', filename='img/3dmod_inactive.png') }}";
+    const tomoName     = {{ tomo_name | tojson }};
+
+    const buttons = document.querySelectorAll('.btn-3dmod');
+    if (!buttons.length) return;
+
+    // Check whether 3dmod is on PATH
+    fetch('/session/check_3dmod')
+        .then(r => r.json())
+        .then(data => {
+            buttons.forEach(btn => {
+                const img = btn.querySelector('img');
+                if (data.available) {
+                    btn.disabled = false;
+                    img.src = activeIcon;
+                    btn.title = 'Open raw file in 3dmod';
+                } else {
+                    btn.disabled = true;
+                    img.src = inactiveIcon;
+                    btn.title = '3dmod not found on PATH';
+                }
+            });
+        })
+        .catch(() => {
+            // Leave buttons disabled if check fails
+        });
+
+    // Click handler
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mediaType = btn.dataset.mediaType;
+            const name      = btn.dataset.tomoName;
+
+            // Brief visual feedback
+            btn.style.opacity = '0.5';
+            setTimeout(() => { btn.style.opacity = ''; }, 600);
+
+            fetch(`/session/launch_3dmod/${mediaType}/${encodeURIComponent(name)}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'ok') {
+                    alert('3dmod error: ' + data.message);
+                }
+            })
+            .catch(err => {
+                alert('Failed to launch 3dmod: ' + err);
+            });
         });
     });
 })();
