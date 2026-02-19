@@ -387,8 +387,9 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
             tomo_data['double_confirmed'] = double_confirmed
             tomo_data['score'] = score
 
-        # Trigger media generation for this tomogram
-        media_manager.generate_media_for_tomogram(tomo_name)
+        # Trigger media generation only if something is still missing
+        if not media_manager._all_media_exists(tomo_name):
+            media_manager.generate_media_for_tomogram(tomo_name)
 
         # Compute prev/next tomogram for navigation
         all_tomo_names = session.get_data()['tomo_name'].tolist()

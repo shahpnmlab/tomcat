@@ -49,6 +49,33 @@ class MediaManager:
             'thumbnail_paths': {}  # Dictionary to map tomo_name to its thumbnail path
         }
 
+    def _all_media_exists(self, tomo_name):
+        """
+        Return True if every expected output file for this tomogram already exists
+        on disk with non-zero size.  Used to skip queuing when nothing needs to be
+        (re)generated.
+        """
+        thumbnail_pattern = os.path.join(self.config.thumbnails_folder, f"{tomo_name}*.png")
+        if not glob.glob(thumbnail_pattern):
+            return False
+
+        if self.config.paths.get('lowmag_path'):
+            lowmag_file = os.path.join(self.config.lowmag_folder, f"{tomo_name}.jpg")
+            if not (os.path.exists(lowmag_file) and os.path.getsize(lowmag_file) > 0):
+                return False
+
+        if self.config.paths.get('tiltseries_path'):
+            ts_file = os.path.join(self.config.tiltseries_folder, f"{tomo_name}.gif")
+            if not (os.path.exists(ts_file) and os.path.getsize(ts_file) > 0):
+                return False
+
+        if self.config.paths.get('tomogram_path'):
+            tomo_file = os.path.join(self.config.tomogram_folder, f"{tomo_name}.gif")
+            if not (os.path.exists(tomo_file) and os.path.getsize(tomo_file) > 0):
+                return False
+
+        return True
+
     def queue_tomogram_for_processing(self, tomo_name, priority=False):
         """
         Add a tomogram to the processing queue.
@@ -58,9 +85,13 @@ class MediaManager:
             priority (bool): If True, add to the front of the queue
 
         Returns:
-            bool: True if queued, False if already in queue
+            bool: True if queued, False if already in queue or all media already exists
         """
         if tomo_name in self.processing_queue:
+            return False
+
+        # Skip queuing entirely when all output files are already on disk
+        if self._all_media_exists(tomo_name):
             return False
 
         # If priority, add to front, otherwise add to end
