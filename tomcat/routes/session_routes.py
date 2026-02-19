@@ -364,13 +364,19 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
             notes = request.form.get('notes', '')
             delete = 'delete' in request.form
             double_confirmed = 'double_confirmed' in request.form
+            score_raw = request.form.get('score', tomo_data.get('score', 0))
+            try:
+                score = int(float(score_raw))
+            except (ValueError, TypeError):
+                score = 0
 
             # Update the tomogram data
             session.update_tomogram_data(
                 tomo_name,
                 notes=notes,
                 delete=delete,
-                double_confirmed=double_confirmed
+                double_confirmed=double_confirmed,
+                score=score
             )
 
             flash("Tomogram data updated successfully")
@@ -379,9 +385,19 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
             tomo_data['notes'] = notes
             tomo_data['delete'] = delete
             tomo_data['double_confirmed'] = double_confirmed
+            tomo_data['score'] = score
 
         # Trigger media generation for this tomogram
         media_manager.generate_media_for_tomogram(tomo_name)
+
+        # Compute prev/next tomogram for navigation
+        all_tomo_names = session.get_data()['tomo_name'].tolist()
+        try:
+            current_idx = all_tomo_names.index(tomo_name)
+        except ValueError:
+            current_idx = -1
+        prev_tomo = all_tomo_names[current_idx - 1] if current_idx > 0 else None
+        next_tomo = all_tomo_names[current_idx + 1] if current_idx >= 0 and current_idx < len(all_tomo_names) - 1 else None
 
         return render_template('detail.html',
                             tomo_name=tomo_name,
@@ -389,7 +405,11 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
                             filename=filename,
                             lowmag_path=config.paths['lowmag_path'],
                             tiltseries_path=config.paths['tiltseries_path'],
-                            tomogram_path=config.paths['tomogram_path'])
+                            tomogram_path=config.paths['tomogram_path'],
+                            prev_tomo=prev_tomo,
+                            next_tomo=next_tomo,
+                            tomo_index=current_idx + 1,
+                            tomo_total=len(all_tomo_names))
 
     @session_bp.route('/download/<filename>')
     def download_csv(filename):

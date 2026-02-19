@@ -60,18 +60,76 @@
             margin-bottom: 15px;
             text-align: center;
         }
+        /* Star rating widget */
+        .star-rating { display: inline-flex; gap: 2px; cursor: pointer; }
+        .star { font-size: 1.4rem; color: #ccc; transition: color 0.15s; line-height: 1; }
+        .star.filled { color: #f5a623; }
+        .star.hover { color: #f5a623; }
+        /* Thumbnail grid view */
+        .thumbnail-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .thumb-card {
+            width: 180px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+            transition: box-shadow .2s;
+            display: flex;
+            flex-direction: column;
+        }
+        .thumb-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+        .thumb-card .thumb-img-wrap {
+            width: 180px;
+            height: 180px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .thumb-card .thumb-img-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .thumb-card .thumb-footer {
+            padding: 6px 8px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .thumb-card .thumb-name {
+            font-size: 0.78rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .thumb-card .thumb-stars { font-size: 1rem; line-height: 1; }
+        .thumb-card .thumb-stars .star { font-size: 1rem; }
     </style>
 </head>
 <body>
     <div class="container-fluid mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>{{ config.APP_NAME }}</h1>
-            <div>
-                <a href="{{ url_for('session.export_session', filename=filename) }}" class="btn btn-outline-info me-2">
+            <div class="d-flex align-items-center gap-2">
+                <div class="btn-group me-2" role="group" aria-label="View toggle">
+                    <button type="button" id="btn-list-view" class="btn btn-outline-secondary active"
+                            title="List view" onclick="setView('list')">&#9776; List</button>
+                    <button type="button" id="btn-thumb-view" class="btn btn-outline-secondary"
+                            title="Thumbnail view" onclick="setView('thumb')">&#9638; Thumbnails</button>
+                </div>
+                <a href="{{ url_for('session.export_session', filename=filename) }}" class="btn btn-outline-info">
                     <i class="bi bi-file-earmark-zip"></i> Export Archive
                 </a>
-                <a href="{{ url_for('settings.settings') }}" class="btn btn-outline-secondary me-2">Settings</a>
-                <a href="{{ url_for('session.new_session') }}" class="btn btn-outline-primary me-2">New Session</a>
+                <a href="{{ url_for('settings.settings') }}" class="btn btn-outline-secondary">Settings</a>
+                <a href="{{ url_for('session.new_session') }}" class="btn btn-outline-primary">New Session</a>
                 <a href="{{ url_for('session.download_csv', filename=filename) }}" class="btn btn-outline-success">Download CSV</a>
             </div>
         </div>
@@ -185,6 +243,43 @@
             </div>
         </div>
 
+        <!-- ===== THUMBNAIL GRID VIEW ===== -->
+        <div id="thumbnail-grid-view" style="display:none;">
+            {% if not df.empty %}
+            <div class="thumbnail-grid">
+                {% for index, row in df.iterrows() %}
+                <a href="{{ url_for('session.detail_view', filename=filename, tomo_name=row['tomo_name']) }}"
+                   class="thumb-card text-decoration-none text-dark">
+                    <div class="thumb-img-wrap">
+                        {% if row['tomo_name'] in thumbnails %}
+                        <img src="{{ url_for('media.serve_thumbnail', filename=thumbnails[row['tomo_name']]) }}"
+                             alt="{{ row['tomo_name'] }}">
+                        {% else %}
+                        <img data-thumbnail-name="{{ row['tomo_name'] }}"
+                             alt="{{ row['tomo_name'] }}"
+                             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f8f9fa'/%3E%3Ctext x='50' y='50' font-size='12' text-anchor='middle' alignment-baseline='middle' font-family='Arial, sans-serif' fill='%236c757d'%3ELoading...%3C/text%3E%3C/svg%3E">
+                        {% endif %}
+                    </div>
+                    <div class="thumb-footer">
+                        <div class="thumb-name" title="{{ row['tomo_name'] }}">{{ row['tomo_name'] }}</div>
+                        <div class="thumb-stars">
+                            {% set s_int = row['score']|int %}
+                            {% for s in [1,2,3,4,5] %}
+                            <span class="star {% if s_int >= s %}filled{% endif %}">&#9733;</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-4">No tomograms added yet.</div>
+            {% endif %}
+        </div>
+        <!-- ===== END THUMBNAIL GRID VIEW ===== -->
+
+        <!-- ===== LIST / TABLE VIEW ===== -->
+        <div id="list-table-view">
         <form method="POST" action="{{ url_for('session.process_csv', filename=filename) }}" id="tomogram-form">
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
@@ -238,8 +333,15 @@
                                 <textarea class="form-control notes-textarea" name="notes_{{ index }}">{{ row['notes'] }}</textarea>
                             </td>
                             <td>
-                                <input type="number" class="form-control" name="score_{{ index }}"
-                                       value="{{ row['score'] }}" min="0" max="5" step="1">
+                                <div class="star-rating" data-index="{{ index }}">
+                                    <input type="hidden" name="score_{{ index }}"
+                                           value="{{ row['score']|int }}" class="score-value">
+                                    {% for s in [1,2,3,4,5] %}
+                                    <span class="star {% if row['score']|int >= s %}filled{% endif %}"
+                                          data-value="{{ s }}"
+                                          title="{{ s }} star{% if s > 1 %}s{% endif %}">&#9733;</span>
+                                    {% endfor %}
+                                </div>
                             </td>
                             <td class="text-center">
                                 <div class="form-check">
@@ -299,6 +401,7 @@
             </nav>
         </div>
         {% endif %}
+        </div><!-- /#list-table-view -->
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -538,6 +641,69 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000); // Poll every 3 seconds
     }
 });
+</script>
+
+<script>
+// Star rating interaction
+document.querySelectorAll('.star-rating').forEach(widget => {
+    const stars = widget.querySelectorAll('.star');
+    const input = widget.querySelector('.score-value');
+
+    stars.forEach(star => {
+        star.addEventListener('click', () => {
+            const val = parseInt(star.dataset.value);
+            input.value = val;
+            stars.forEach(s => {
+                s.classList.toggle('filled', parseInt(s.dataset.value) <= val);
+            });
+            // Trigger autosave dirty flag
+            pendingChanges = true;
+        });
+
+        star.addEventListener('mouseenter', () => {
+            const val = parseInt(star.dataset.value);
+            stars.forEach(s => {
+                s.classList.toggle('hover', parseInt(s.dataset.value) <= val);
+            });
+        });
+
+        star.addEventListener('mouseleave', () => {
+            stars.forEach(s => s.classList.remove('hover'));
+        });
+    });
+});
+</script>
+
+<script>
+// ===== View toggle (Thumbnail / List) =====
+const VIEW_KEY = 'tomcat_view_mode'; // localStorage key
+
+function setView(mode) {
+    const listView  = document.getElementById('list-table-view');
+    const thumbView = document.getElementById('thumbnail-grid-view');
+    const btnList   = document.getElementById('btn-list-view');
+    const btnThumb  = document.getElementById('btn-thumb-view');
+
+    if (mode === 'thumb') {
+        listView.style.display  = 'none';
+        thumbView.style.display = 'block';
+        btnThumb.classList.add('active');
+        btnList.classList.remove('active');
+    } else {
+        listView.style.display  = 'block';
+        thumbView.style.display = 'none';
+        btnList.classList.add('active');
+        btnThumb.classList.remove('active');
+    }
+    try { localStorage.setItem(VIEW_KEY, mode); } catch(e) {}
+}
+
+// Restore saved preference on page load
+(function() {
+    let saved = 'list';
+    try { saved = localStorage.getItem(VIEW_KEY) || 'list'; } catch(e) {}
+    setView(saved);
+})();
 </script>
 </body>
 </html>

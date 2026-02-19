@@ -233,38 +233,158 @@ function updateMedia(key, mediaType, tomoName) {
         };
     } else if (element.tagName === 'DIV') {
         // For container elements, create an appropriate media element
-        let mediaElement;
+        element.innerHTML = '';
 
-        if (mediaType === 'lowmag') {
-            // Create image for lowmag
-            mediaElement = document.createElement('img');
+        if (mediaType === 'tiltseries' || mediaType === 'tomogram') {
+            // Use interactive GIF player for animations
+            initGifPlayer(element, mediaUrl, mediaType, tomoName, key);
+        } else {
+            // Create plain image for lowmag
+            const mediaElement = document.createElement('img');
             mediaElement.src = mediaUrl;
             mediaElement.className = 'img-fluid';
             mediaElement.alt = `${tomoName} low magnification image`;
-        } else {
-            // Create image for animations
-            mediaElement = document.createElement('img');
-            mediaElement.src = mediaUrl;
-            mediaElement.className = 'img-fluid';
-            mediaElement.alt = `${tomoName} ${mediaType} animation`;
+            element.appendChild(mediaElement);
+
+            mediaElement.onload = () => {
+                logDebug(`${mediaType} for ${tomoName} loaded successfully`);
+                monitoredMedia.media.delete(key);
+            };
+            mediaElement.onerror = () => {
+                logDebug(`Failed to load ${mediaType} for ${tomoName}, will retry`);
+            };
         }
-
-        // Clear the container and add the new element
-        element.innerHTML = '';
-        element.appendChild(mediaElement);
-
-        // Add loading and error handling
-        mediaElement.onload = () => {
-            logDebug(`${mediaType} for ${tomoName} loaded successfully`);
-            // Remove from monitoring
-            monitoredMedia.media.delete(key);
-        };
-
-        mediaElement.onerror = () => {
-            logDebug(`Failed to load ${mediaType} for ${tomoName}, will retry`);
-            // Keep in monitoring but don't increment attempts here
-        };
     }
+}
+
+/**
+ * Interactive GIF player with play/pause and frame scrubbing.
+ * Requires omggif (GifReader) to be available as a global.
+ */
+function initGifPlayer(container, gifUrl, mediaType, tomoName, monitorKey) {
+    if (typeof GifReader === 'undefined') {
+        // omggif not loaded yet — fall back to plain animated gif
+        logDebug('omggif not available, falling back to plain <img> for ' + tomoName);
+        const img = document.createElement('img');
+        img.src = gifUrl;
+        img.className = 'img-fluid';
+        img.alt = `${tomoName} ${mediaType} animation`;
+        container.appendChild(img);
+        img.onload = () => monitoredMedia.media.delete(monitorKey);
+        return;
+    }
+
+    fetch(gifUrl)
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.arrayBuffer();
+        })
+        .then(buf => {
+            const bytes = new Uint8Array(buf);
+            const reader = new GifReader(bytes);
+            const numFrames = reader.numFrames();
+            const W = reader.width;
+            const H = reader.height;
+
+            // Decoded frame cache
+            const frameCache = [];
+
+            function getFrame(idx) {
+                if (!frameCache[idx]) {
+                    const pixels = new Uint8ClampedArray(W * H * 4);
+                    reader.decodeAndBlitFrameRGBA(idx, pixels);
+                    frameCache[idx] = new ImageData(pixels, W, H);
+                }
+                return frameCache[idx];
+            }
+
+            // Canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = W;
+            canvas.height = H;
+            canvas.style.cssText = 'max-width:100%;max-height:260px;display:block;margin:0 auto;';
+            const ctx = canvas.getContext('2d');
+
+            // Controls bar
+            const controls = document.createElement('div');
+            controls.className = 'gif-player-controls';
+
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-sm btn-outline-secondary';
+            btn.title = 'Play / Pause';
+            btn.textContent = '\u23F8'; // ⏸
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = 0;
+            slider.max = numFrames - 1;
+            slider.value = 0;
+
+            const frameLabel = document.createElement('small');
+            frameLabel.className = 'text-muted text-nowrap';
+            frameLabel.textContent = `1 / ${numFrames}`;
+
+            controls.append(btn, slider, frameLabel);
+            container.append(canvas, controls);
+
+            // Render first frame immediately
+            ctx.putImageData(getFrame(0), 0, 0);
+
+            // Playback state
+            let currentFrame = 0;
+            let playing = true;
+            let rafId = null;
+            let lastTime = 0;
+
+            function getDelay(idx) {
+                const fi = reader.frameInfo(idx);
+                // GIF delay is in centiseconds; 0 means "as fast as possible" → use 100ms
+                return (fi.delay > 0 ? fi.delay : 10) * 10;
+            }
+
+            function animStep(ts) {
+                if (!playing) return;
+                if (ts - lastTime >= getDelay(currentFrame)) {
+                    currentFrame = (currentFrame + 1) % numFrames;
+                    ctx.putImageData(getFrame(currentFrame), 0, 0);
+                    slider.value = currentFrame;
+                    frameLabel.textContent = `${currentFrame + 1} / ${numFrames}`;
+                    lastTime = ts;
+                }
+                rafId = requestAnimationFrame(animStep);
+            }
+
+            rafId = requestAnimationFrame(animStep);
+
+            btn.addEventListener('click', () => {
+                playing = !playing;
+                btn.textContent = playing ? '\u23F8' : '\u25B6'; // ⏸ or ▶
+                if (playing) {
+                    lastTime = 0;
+                    rafId = requestAnimationFrame(animStep);
+                } else {
+                    cancelAnimationFrame(rafId);
+                }
+            });
+
+            slider.addEventListener('input', () => {
+                currentFrame = parseInt(slider.value);
+                frameLabel.textContent = `${currentFrame + 1} / ${numFrames}`;
+                ctx.putImageData(getFrame(currentFrame), 0, 0);
+            });
+
+            // Hide loading spinner if present
+            const loadingEl = document.getElementById(`${mediaType}-loading`);
+            if (loadingEl) loadingEl.style.display = 'none';
+
+            monitoredMedia.media.delete(monitorKey);
+            logDebug(`GIF player ready for ${mediaType} ${tomoName}: ${numFrames} frames`);
+        })
+        .catch(err => {
+            console.error(`[MediaUpdater] GIF player error for ${tomoName} ${mediaType}:`, err);
+            // Retry will happen on next poll cycle — element already cleared so show message
+            container.innerHTML = '<div class="text-center text-muted small p-2">Loading animation...</div>';
+        });
 }
 
 /**

@@ -95,18 +95,78 @@
             font-weight: 500;
             margin-bottom: 5px;
         }
+        /* Star rating (detail page) */
+        .detail-star-rating { display: inline-flex; align-items: center; gap: 2px; cursor: pointer; }
+        .detail-star { font-size: 1.5rem; color: #ccc; transition: color 0.15s; line-height: 1; }
+        .detail-star.filled { color: #f5a623; }
+        .detail-star.hover { color: #f5a623; }
+        /* GIF player controls */
+        .gif-player-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 4px 2px;
+            width: 100%;
+        }
+        .gif-player-controls input[type=range] { flex: 1; }
+        /* Fixed side-navigation arrows */
+        .side-nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 72px;
+            background: rgba(255,255,255,0.85);
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 2rem;
+            color: #333;
+            text-decoration: none;
+            transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            cursor: pointer;
+            line-height: 1;
+            user-select: none;
+        }
+        .side-nav-arrow:hover {
+            background: #0d6efd;
+            color: #fff;
+            border-color: #0d6efd;
+            box-shadow: 0 4px 16px rgba(13,110,253,0.35);
+        }
+        .side-nav-arrow.disabled {
+            opacity: 0.25;
+            pointer-events: none;
+        }
+        .side-nav-arrow.left  { left:  12px; }
+        .side-nav-arrow.right { right: 12px; }
     </style>
     <script src="{{ url_for('static', filename='js/media_updater.js') }}"></script>
 </head>
 <body>
     <div class="container mt-4 mb-5">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <!-- Fixed left/right navigation arrows -->
+        {% if prev_tomo %}
+        <a href="{{ url_for('session.detail_view', filename=filename, tomo_name=prev_tomo) }}"
+           class="side-nav-arrow left" title="Previous: {{ prev_tomo }}">&#8592;</a>
+        {% else %}
+        <span class="side-nav-arrow left disabled" aria-disabled="true">&#8592;</span>
+        {% endif %}
+
+        {% if next_tomo %}
+        <a href="{{ url_for('session.detail_view', filename=filename, tomo_name=next_tomo) }}"
+           class="side-nav-arrow right" title="Next: {{ next_tomo }}">&#8594;</a>
+        {% else %}
+        <span class="side-nav-arrow right disabled" aria-disabled="true">&#8594;</span>
+        {% endif %}
+
+        <div class="mb-4">
             <h1>{{ tomo_name }} <small class="text-muted">Details</small></h1>
-            <div>
-                <a href="{{ url_for('process_csv', filename=filename) }}" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left"></i> Back to List
-                </a>
-            </div>
+            <div class="text-muted small">{{ tomo_index }} / {{ tomo_total }}</div>
         </div>
 
         {% with messages = get_flashed_messages() %}
@@ -136,7 +196,13 @@
                         </tr>
                         <tr>
                             <th>Score</th>
-                            <td>{{ tomo_data.score }}</td>
+                            <td>
+                                {% set score_int = tomo_data.score|int %}
+                                {% for s in [1,2,3,4,5] %}
+                                <span style="font-size:1.3rem; color:{% if score_int >= s %}#f5a623{% else %}#ccc{% endif %};">&#9733;</span>
+                                {% endfor %}
+                                <small class="text-muted ms-1">({{ score_int }}/5)</small>
+                            </td>
                         </tr>
                         <tr>
                             <th>Status</th>
@@ -225,9 +291,22 @@
 
         <h3 class="section-title">Notes</h3>
         <div class="notes-container">
-            <form method="POST" action="{{ url_for('detail_view', filename=filename, tomo_name=tomo_name) }}">
+            <form method="POST" action="{{ url_for('session.detail_view', filename=filename, tomo_name=tomo_name) }}">
                 <div class="mb-3">
                     <textarea class="form-control notes-textarea" name="notes" id="notes">{{ tomo_data.notes }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Score</label>
+                    <div class="detail-star-rating">
+                        <input type="hidden" name="score" id="score-value" value="{{ tomo_data.score|int }}" class="score-value">
+                        {% set score_int = tomo_data.score|int %}
+                        {% for s in [1,2,3,4,5] %}
+                        <span class="detail-star {% if score_int >= s %}filled{% endif %}"
+                              data-value="{{ s }}"
+                              title="{{ s }} star{% if s > 1 %}s{% endif %}">&#9733;</span>
+                        {% endfor %}
+                        <small class="text-muted ms-2 detail-score-label">({{ score_int }}/5)</small>
+                    </div>
                 </div>
                 <div class="d-flex justify-content-between">
                     <div>
@@ -246,9 +325,16 @@
                 </div>
             </form>
         </div>
+
+        <!-- Back to list – bottom centre -->
+        <div class="text-center mt-4 mb-2">
+            <a href="{{ url_for('session.process_csv', filename=filename) }}"
+               class="btn btn-outline-secondary px-5">&#8592; Back to List</a>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Manually check and hide loading indicators for already loaded images
@@ -345,6 +431,37 @@
 
     // Check media status every 2 seconds
     setInterval(checkMediaStatus, 2000);
+</script>
+
+<script>
+// Editable star rating on detail page
+(function() {
+    const widget = document.querySelector('.detail-star-rating');
+    if (!widget) return;
+    const stars = widget.querySelectorAll('.detail-star');
+    const input = widget.querySelector('.score-value');
+    const label = widget.querySelector('.detail-score-label');
+
+    stars.forEach(star => {
+        star.addEventListener('click', () => {
+            const val = parseInt(star.dataset.value);
+            input.value = val;
+            if (label) label.textContent = `(${val}/5)`;
+            stars.forEach(s => {
+                s.classList.toggle('filled', parseInt(s.dataset.value) <= val);
+            });
+        });
+        star.addEventListener('mouseenter', () => {
+            const val = parseInt(star.dataset.value);
+            stars.forEach(s => {
+                s.classList.toggle('hover', parseInt(s.dataset.value) <= val);
+            });
+        });
+        star.addEventListener('mouseleave', () => {
+            stars.forEach(s => s.classList.remove('hover'));
+        });
+    });
+})();
 </script>
 </body>
 </html>

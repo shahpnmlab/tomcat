@@ -46,7 +46,7 @@ def initialize_routes(config):
                 # If no session exists yet, create a new one instead of going to upload page
                 return redirect(url_for('session.new_session'))
 
-        return render_template('settings.html', paths=config.paths)
+        return render_template('settings.html', paths=config.paths, cwd=config.base_dir)
 
 
     @settings_bp.route('/browse_directory', methods=['POST'])

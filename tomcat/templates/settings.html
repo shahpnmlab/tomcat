@@ -138,7 +138,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Global variables
-        let currentPath = '{{ paths.tomogram_path or "/" }}'; // Initialize with tomogram_path or root
+        const DEFAULT_BROWSE_PATH = '{{ cwd }}'; // Current working directory as default
+        let currentPath = DEFAULT_BROWSE_PATH;
         let currentTarget = null;
         const fileBrowserModal = new bootstrap.Modal(document.getElementById('fileBrowserModal'));
 
@@ -146,13 +147,12 @@
         function openFileBrowser(targetId) {
             currentTarget = targetId;
 
-            // Use the current value as starting path if it exists and is not empty
+            // Use the field's current value as starting path if set, otherwise use cwd
             const inputElement = document.getElementById(targetId);
             if (inputElement.value && inputElement.value.trim() !== '') {
-                currentPath = inputElement.value;
+                currentPath = inputElement.value.trim();
             } else {
-                // Use a default path, e.g. the tomogram path or root if not set
-                currentPath = '{{ paths.tomogram_path or "/" }}';
+                currentPath = DEFAULT_BROWSE_PATH;
             }
 
             // Initialize the browser with current path
@@ -234,10 +234,10 @@
                     Error browsing directory: ${error.message}
                 </div>`;
 
-                // If path is invalid, try to reset to a working path
-                if (path !== ('{{ paths.tomogram_path or "/" }}') && path !== '/') {
+                // If path is invalid, fall back to cwd after a short delay
+                if (path !== DEFAULT_BROWSE_PATH && path !== '/') {
                     setTimeout(() => {
-                        currentPath = '{{ paths.tomogram_path or "/" }}';
+                        currentPath = DEFAULT_BROWSE_PATH;
                         document.getElementById('current_path').value = currentPath;
                         browsePath(currentPath);
                     }, 3000);
