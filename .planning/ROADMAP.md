@@ -27,7 +27,10 @@
 - [ ] Navigating to `/session/detail/<file>/<tomo>` for a tomogram whose media files are already on disk does not submit new background jobs (verified by log output showing no new task submissions)
 - [ ] Navigating between multiple catalogue entries in sequence does not re-generate media that was already generated on the first visit
 - [ ] `_all_media_exists()` returns `True` only when all three media types (thumbnail, tiltseries, tomogram) are present on disk; returns `False` when any one is missing
-**Plans:** TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-PLAN-01.md — Fix get_media_status() disk-first gate and status dict population
 
 ### Phase 2: Thumbnail Pagination
 **Goal:** The thumbnail view renders previous/next page controls and preserves page state when switching between thumbnail and tabulated views
@@ -103,7 +106,7 @@ Recommended execution order: 1 → 2 → 3 → 4 (sequential for reviewer clarit
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Media Cache Fix | 0/0 | Not started | - |
+| 1. Media Cache Fix | 0/1 | Not started | - |
 | 2. Thumbnail Pagination | 0/0 | Not started | - |
 | 3. File Deduplication | 0/0 | Not started | - |
 | 4. Thread Safety & Security | 0/0 | Not started | - |
