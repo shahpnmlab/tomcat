@@ -24,7 +24,7 @@ Tomograms load from cache reliably, the catalogue is free of duplicates, and the
 
 ### Active
 
-- [ ] **BUG-01**: GIF/thumbnail cache is checked before re-queuing — media not regenerated when files already exist on disk
+- [x] **BUG-01**: GIF/thumbnail cache is checked before re-queuing — media not regenerated when files already exist on disk (Validated in Phase 01: media-cache-fix)
 - [ ] **BUG-02**: Thumbnail view has page navigation matching tabulated view
 - [ ] **BUG-03**: `_preali.mrc` files do not create duplicate catalogue entries; used as fallback when `.ali` file absent
 - [ ] **BUG-04**: `MediaManager` dict mutations are thread-safe (locks around `processing_queue`, `thumbnail_progress`, `media_status`)
@@ -76,4 +76,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-01 after initialization*
+*Last updated: 2026-04-02 after Phase 01 (media-cache-fix) complete*
