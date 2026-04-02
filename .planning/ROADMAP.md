@@ -38,13 +38,15 @@ Plans:
 **Requirements:** PAGE-01, PAGE-02, PAGE-03
 **Key files:**
 - `tomcat/routes/session_routes.py` — route handler for the thumbnail view
-- `tomcat/templates/` — thumbnail view template (whichever template renders the grid view)
+- `tomcat/templates/form.html` — renders both thumbnail grid and tabulated views
 **Success criteria:**
 - [ ] The thumbnail view renders a visible previous/next page control and a page number indicator when a session has more entries than fit on one page
 - [ ] Clicking next/previous in the thumbnail view advances or retreats by one page, matching the page size of the tabulated view
 - [ ] Switching from thumbnail view to tabulated view (or vice versa) on page 3 keeps the user on page 3, not page 1
-**Plans:** TBD
-**UI hint**: yes
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02-01-PLAN.md — Add pagination controls inside #thumbnail-grid-view in form.html
 
 ### Phase 3: File Deduplication
 **Goal:** `_preali.mrc` files are resolved to their canonical tomogram basename and do not appear as independent entries in the catalogue
@@ -107,7 +109,7 @@ Recommended execution order: 1 → 2 → 3 → 4 (sequential for reviewer clarit
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Media Cache Fix | 0/1 | Not started | - |
-| 2. Thumbnail Pagination | 0/0 | Not started | - |
+| 2. Thumbnail Pagination | 0/1 | Not started | - |
 | 3. File Deduplication | 0/0 | Not started | - |
 | 4. Thread Safety & Security | 0/0 | Not started | - |
 
