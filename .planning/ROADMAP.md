@@ -8,7 +8,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Media Cache Fix** — Correct cache-check logic in MediaManager so already-generated media is never re-queued
+- [x] **Phase 1: Media Cache Fix** — Correct cache-check logic in MediaManager so already-generated media is never re-queued (completed 2026-04-02)
 - [ ] **Phase 2: Thumbnail Pagination** — Add page navigation controls to the thumbnail view, matching tabulated view behaviour
 - [ ] **Phase 3: File Deduplication** — Strip `_preali` suffix in FileLocator so `_preali.mrc` files do not create duplicate catalogue entries
 - [ ] **Phase 4: Thread Safety & Security** — Add locks to MediaManager and ThreadManager; fix Zip Slip vulnerability in archive import
@@ -27,7 +27,7 @@
 - [ ] Navigating to `/session/detail/<file>/<tomo>` for a tomogram whose media files are already on disk does not submit new background jobs (verified by log output showing no new task submissions)
 - [ ] Navigating between multiple catalogue entries in sequence does not re-generate media that was already generated on the first visit
 - [ ] `_all_media_exists()` returns `True` only when all three media types (thumbnail, tiltseries, tomogram) are present on disk; returns `False` when any one is missing
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 01-PLAN-01.md — Fix get_media_status() disk-first gate and status dict population

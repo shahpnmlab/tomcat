@@ -7,9 +7,9 @@
 
 ### Media Cache
 
-- [ ] **CACHE-01**: Detail view (`/session/detail/`) does not re-queue media generation when GIF/thumbnail files already exist on disk
-- [ ] **CACHE-02**: `MediaManager._all_media_exists()` correctly checks all three media types (thumbnail, tiltseries, tomogram) before queuing
-- [ ] **CACHE-03**: Switching between catalogue entries does not trigger re-generation of already-cached media
+- [x] **CACHE-01**: Detail view (`/session/detail/`) does not re-queue media generation when GIF/thumbnail files already exist on disk
+- [x] **CACHE-02**: `MediaManager._all_media_exists()` correctly checks all three media types (thumbnail, tiltseries, tomogram) before queuing
+- [x] **CACHE-03**: Switching between catalogue entries does not trigger re-generation of already-cached media
 
 ### UI Pagination
 
@@ -65,9 +65,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CACHE-01 | Phase 1 | Pending |
-| CACHE-02 | Phase 1 | Pending |
-| CACHE-03 | Phase 1 | Pending |
+| CACHE-01 | Phase 1 | Complete |
+| CACHE-02 | Phase 1 | Complete |
+| CACHE-03 | Phase 1 | Complete |
 | PAGE-01 | Phase 2 | Pending |
 | PAGE-02 | Phase 2 | Pending |
 | PAGE-03 | Phase 2 | Pending |
