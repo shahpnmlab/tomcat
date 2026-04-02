@@ -276,6 +276,34 @@
             <div class="text-center text-muted py-4">No tomograms added yet.</div>
             {% endif %}
         </div>
+        <!-- Thumbnail Grid Pagination Controls -->
+        {% if pagination and pagination.iter_pages %}
+        <div class="d-flex justify-content-between align-items-center my-4">
+            <div class="text-muted small">
+                Page <b>{{ pagination.page }}</b> of <b>{{ pagination.total_pages }}</b>
+                &mdash; {{ pagination.total_rows }} entries total
+            </div>
+            <nav aria-label="Thumbnail page navigation">
+                <ul class="pagination mb-0">
+                    <li class="page-item {% if pagination.page <= 1 %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('session.process_csv', filename=filename, page=pagination.page - 1, notes_query=search_notes or None) }}">«</a>
+                    </li>
+                    {% for p in pagination.iter_pages %}
+                        {% if p %}
+                            <li class="page-item {% if p == pagination.page %}active{% endif %}" {% if p == pagination.page %}aria-current="page"{% endif %}>
+                                <a class="page-link" href="{{ url_for('session.process_csv', filename=filename, page=p, notes_query=search_notes or None) }}">{{ p }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    <li class="page-item {% if pagination.page >= pagination.total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('session.process_csv', filename=filename, page=pagination.page + 1, notes_query=search_notes or None) }}">»</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
         <!-- ===== END THUMBNAIL GRID VIEW ===== -->
 
         <!-- ===== LIST / TABLE VIEW ===== -->
