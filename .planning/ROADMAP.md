@@ -9,7 +9,7 @@
 ## Phases
 
 - [x] **Phase 1: Media Cache Fix** — Correct cache-check logic in MediaManager so already-generated media is never re-queued (completed 2026-04-02)
-- [ ] **Phase 2: Thumbnail Pagination** — Add page navigation controls to the thumbnail view, matching tabulated view behaviour
+- [x] **Phase 2: Thumbnail Pagination** — Add page navigation controls to the thumbnail view, matching tabulated view behaviour (completed 2026-04-02)
 - [ ] **Phase 3: File Deduplication** — Strip `_preali` suffix in FileLocator so `_preali.mrc` files do not create duplicate catalogue entries
 - [ ] **Phase 4: Thread Safety & Security** — Add locks to MediaManager and ThreadManager; fix Zip Slip vulnerability in archive import
 
@@ -43,10 +43,10 @@ Plans:
 - [ ] The thumbnail view renders a visible previous/next page control and a page number indicator when a session has more entries than fit on one page
 - [ ] Clicking next/previous in the thumbnail view advances or retreats by one page, matching the page size of the tabulated view
 - [ ] Switching from thumbnail view to tabulated view (or vice versa) on page 3 keeps the user on page 3, not page 1
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 02-01-PLAN.md — Add pagination controls inside #thumbnail-grid-view in form.html
+- [x] 02-01-PLAN.md — Add pagination controls inside #thumbnail-grid-view in form.html
 
 ### Phase 3: File Deduplication
 **Goal:** `_preali.mrc` files are resolved to their canonical tomogram basename and do not appear as independent entries in the catalogue

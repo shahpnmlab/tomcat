@@ -13,9 +13,9 @@
 
 ### UI Pagination
 
-- [ ] **PAGE-01**: Thumbnail view renders page navigation controls (previous/next page, page number indicator)
-- [ ] **PAGE-02**: Thumbnail view page navigation matches the behaviour of the tabulated view (same route parameter handling)
-- [ ] **PAGE-03**: Page state is preserved when switching between tabulated and thumbnail views within a session
+- [x] **PAGE-01**: Thumbnail view renders page navigation controls (previous/next page, page number indicator)
+- [x] **PAGE-02**: Thumbnail view page navigation matches the behaviour of the tabulated view (same route parameter handling)
+- [x] **PAGE-03**: Page state is preserved when switching between tabulated and thumbnail views within a session
 
 ### File Deduplication
 
@@ -68,9 +68,9 @@
 | CACHE-01 | Phase 1 | Complete |
 | CACHE-02 | Phase 1 | Complete |
 | CACHE-03 | Phase 1 | Complete |
-| PAGE-01 | Phase 2 | Pending |
-| PAGE-02 | Phase 2 | Pending |
-| PAGE-03 | Phase 2 | Pending |
+| PAGE-01 | Phase 2 | Complete |
+| PAGE-02 | Phase 2 | Complete |
+| PAGE-03 | Phase 2 | Complete |
 | DEDUP-01 | Phase 3 | Pending |
 | DEDUP-02 | Phase 3 | Pending |
 | DEDUP-03 | Phase 3 | Pending |
