@@ -35,6 +35,8 @@ def _make_manager(tmpdir):
     }
 
     thread_manager = MagicMock()
+    thread_manager.max_workers = 4
+    thread_manager.get_active_task_count.return_value = 0
     return MediaManager(config, thread_manager)
 
 

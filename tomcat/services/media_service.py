@@ -522,32 +522,38 @@ class MediaManager:
         else:
             return {"status": "error", "message": "Invalid media type"}
 
-        # Check if the media file exists
         media_file = os.path.join(media_folder, f"{tomo_name}{file_extension}")
 
+        # Disk-first gate (D-03, D-06): if file already exists with content, return ready
+        # immediately and cache the result so subsequent polls skip disk I/O.
         if os.path.exists(media_file) and os.path.getsize(media_file) > 0:
-            # File exists and has content, it's ready
             logger.debug(f"Media file is ready: {media_file}")
+            self.media_status[status_key] = "ready"
             return {
                 "status": "ready",
-                "reload": self.media_status.get(status_key) == "generating",  # Reload if we were previously generating
+                "reload": False,
                 "size": os.path.getsize(media_file)
             }
 
-        # Check the status
+        # Fast path: if already tracked as generating or error, return without queuing (D-05).
         status = self.media_status.get(status_key, "unknown")
+        if status in ("generating", "error"):
+            return {
+                "status": status,
+                "reload": False,
+                "file_exists": False,
+                "file_size": 0
+            }
 
-        # If status is unknown but the file should be generating, update status and queue it
-        if status == "unknown" and not os.path.exists(media_file):
-            self.media_status[status_key] = "generating"
-            self.queue_tomogram_for_processing(tomo_name, priority=True)  # Priority since user is requesting it
-            status = "generating"
-
+        # Status is unknown and file does not exist — queue for generation (D-05).
+        # Set status before returning so the next poll sees "generating", not "unknown".
+        self.queue_tomogram_for_processing(tomo_name, priority=True)
+        self.media_status[status_key] = "generating"
         return {
-            "status": status,
+            "status": "generating",
             "reload": False,
-            "file_exists": os.path.exists(media_file),
-            "file_size": os.path.getsize(media_file) if os.path.exists(media_file) else 0
+            "file_exists": False,
+            "file_size": 0
         }
 
     def get_thumbnail_path(self, tomo_name):
