@@ -76,7 +76,12 @@ Plans:
 - [ ] `ThreadManager.submit_task()` never submits a duplicate job for the same `task_key` even when called from two threads simultaneously
 - [ ] Importing a `.tomcat` archive containing a member path such as `../../etc/passwd` causes the import to abort with a visible error message and writes no files outside `.tomcat/uploads/`
 - [ ] A valid `.tomcat` archive imports successfully after the security check is in place (no regression)
-**Plans:** TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Create test scaffolds for thread safety and security (Wave 0)
+- [ ] 04-02-PLAN.md — Implement locks in MediaManager and ThreadManager (Wave 1)
+- [ ] 04-03-PLAN.md — Implement Zip Slip protection in import_archive (Wave 1)
 
 ---
 
@@ -111,10 +116,10 @@ Recommended execution order: 1 → 2 → 3 → 4 (sequential for reviewer clarit
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Media Cache Fix | 0/1 | Not started | - |
-| 2. Thumbnail Pagination | 0/1 | Not started | - |
-| 3. File Deduplication | 0/1 | Not started | - |
-| 4. Thread Safety & Security | 0/0 | Not started | - |
+| 1. Media Cache Fix | 1/1 | Complete | 2026-04-02 |
+| 2. Thumbnail Pagination | 1/1 | Complete | 2026-04-02 |
+| 3. File Deduplication | 1/1 | Complete | 2026-04-03 |
+| 4. Thread Safety & Security | 0/3 | Not started | - |
 
 ---
 
