@@ -10,7 +10,7 @@
 
 - [x] **Phase 1: Media Cache Fix** — Correct cache-check logic in MediaManager so already-generated media is never re-queued (completed 2026-04-02)
 - [x] **Phase 2: Thumbnail Pagination** — Add page navigation controls to the thumbnail view, matching tabulated view behaviour (completed 2026-04-02)
-- [ ] **Phase 3: File Deduplication** — Strip `_preali` suffix in FileLocator so `_preali.mrc` files do not create duplicate catalogue entries
+- [x] **Phase 3: File Deduplication** — Strip `_preali` suffix in FileLocator so `_preali.mrc` files do not create duplicate catalogue entries (completed 2026-04-03)
 - [ ] **Phase 4: Thread Safety & Security** — Add locks to MediaManager and ThreadManager; fix Zip Slip vulnerability in archive import
 
 ---
@@ -58,10 +58,10 @@ Plans:
 - [ ] A directory containing both `tomo001_rec.mrc` and `tomo001_preali.mrc` produces exactly one catalogue entry (`tomo001`), not two
 - [ ] When no `.ali` file exists for a tomogram, `tomo001_preali.mrc` is selected as the tilt series file; when `tomo001_ali.mrc` exists, the `_preali` file is not used (existing priority order maintained)
 - [ ] Sessions created before this fix that contain rows with `_preali` in the name load without error; existing annotations on those rows are not lost
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 03-01-PLAN.md — Strip _preali suffix in extract_basename() to eliminate duplicate catalogue entries
+- [x] 03-01-PLAN.md — Strip _preali suffix in extract_basename() to eliminate duplicate catalogue entries
 
 ### Phase 4: Thread Safety & Security
 **Goal:** MediaManager state is never corrupted under concurrent requests, and archive import cannot write files outside the target directory

@@ -19,9 +19,9 @@
 
 ### File Deduplication
 
-- [ ] **DEDUP-01**: `FileLocator.extract_basename()` strips `_preali` suffix so `_preali.mrc` files share a canonical name with their tomogram
-- [ ] **DEDUP-02**: `_preali.mrc` is used as the tilt series fallback only when no `.ali` file exists for a given tomogram (existing priority order maintained)
-- [ ] **DEDUP-03**: Existing sessions with duplicate `_preali` entries are not broken by the fix (graceful handling)
+- [x] **DEDUP-01**: `FileLocator.extract_basename()` strips `_preali` suffix so `_preali.mrc` files share a canonical name with their tomogram
+- [x] **DEDUP-02**: `_preali.mrc` is used as the tilt series fallback only when no `.ali` file exists for a given tomogram (existing priority order maintained)
+- [x] **DEDUP-03**: Existing sessions with duplicate `_preali` entries are not broken by the fix (graceful handling)
 
 ### Thread Safety
 
@@ -71,9 +71,9 @@
 | PAGE-01 | Phase 2 | Complete |
 | PAGE-02 | Phase 2 | Complete |
 | PAGE-03 | Phase 2 | Complete |
-| DEDUP-01 | Phase 3 | Pending |
-| DEDUP-02 | Phase 3 | Pending |
-| DEDUP-03 | Phase 3 | Pending |
+| DEDUP-01 | Phase 3 | Complete |
+| DEDUP-02 | Phase 3 | Complete |
+| DEDUP-03 | Phase 3 | Complete |
 | THREAD-01 | Phase 4 | Pending |
 | THREAD-02 | Phase 4 | Pending |
 | THREAD-03 | Phase 4 | Pending |

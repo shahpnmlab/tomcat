@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 02
+current_phase: 03
 current_plan: 1
-status: Executing Phase 02
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-04-02T23:25:42.185Z"
+status: Executing Phase 03
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-04-03T00:16:02.999Z"
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** Tomograms load from cache reliably, the catalogue is free of duplicates, and the app is structurally sound
-**Current focus:** Phase 02 — thumbnail-pagination
+**Current focus:** Phase 03 — file-deduplication
 
 ## Progress
 
@@ -32,12 +32,12 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 ## Status
 
 **Phase:** In Progress — Plan 01 complete
-**Current phase:** 02
+**Current phase:** 03
 **Current plan:** 1
 **Milestone:** Bug Fix v1
 
-**Last session:** 2026-04-02T23:25:42.180Z
-**Stopped at:** Completed 02-01-PLAN.md
+**Last session:** 2026-04-03T00:16:02.995Z
+**Stopped at:** Completed 03-01-PLAN.md
 
 ## Phases
 
@@ -55,6 +55,8 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 - **Phase 01-01:** Queue-only-once: queue_tomogram_for_processing called only when status unknown AND file absent from disk
 - [Phase 02-01]: No route changes needed: view toggle is client-side only; pagination links share the same URL for both views
 - [Phase 02-01]: Thumbnail pagination block mirrors list block structurally with only aria-label changed
+- [Phase 03]: Added _preali.mrc and _preali to tiltseries_suffixes before _ali entries; added r'_preali' regex pattern before r'_rec' in extract_basename()
+- [Phase 03]: No changes to FileLocator.EXTENSIONS or Session.load() — _preali.mrc priority already correct, backward compat preserved
 
 ## Performance Metrics
 
@@ -62,6 +64,7 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 |-------|------|----------|-------|-------|
 | 01 | 01 | 3 min | 1 (TDD) | 3 |
 | Phase 02 P01 | 5min | 2 tasks | 1 files |
+| Phase 03 P01 | 5min | 2 tasks | 2 files |
 
 ## Next Action
 
