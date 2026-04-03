@@ -58,7 +58,10 @@ Plans:
 - [ ] A directory containing both `tomo001_rec.mrc` and `tomo001_preali.mrc` produces exactly one catalogue entry (`tomo001`), not two
 - [ ] When no `.ali` file exists for a tomogram, `tomo001_preali.mrc` is selected as the tilt series file; when `tomo001_ali.mrc` exists, the `_preali` file is not used (existing priority order maintained)
 - [ ] Sessions created before this fix that contain rows with `_preali` in the name load without error; existing annotations on those rows are not lost
-**Plans:** TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 03-01-PLAN.md — Strip _preali suffix in extract_basename() to eliminate duplicate catalogue entries
 
 ### Phase 4: Thread Safety & Security
 **Goal:** MediaManager state is never corrupted under concurrent requests, and archive import cannot write files outside the target directory
@@ -110,7 +113,7 @@ Recommended execution order: 1 → 2 → 3 → 4 (sequential for reviewer clarit
 |-------|----------------|--------|-----------|
 | 1. Media Cache Fix | 0/1 | Not started | - |
 | 2. Thumbnail Pagination | 0/1 | Not started | - |
-| 3. File Deduplication | 0/0 | Not started | - |
+| 3. File Deduplication | 0/1 | Not started | - |
 | 4. Thread Safety & Security | 0/0 | Not started | - |
 
 ---
