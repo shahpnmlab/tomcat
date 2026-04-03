@@ -7,6 +7,7 @@ thumbnails, animations, and other visualizations.
 import os
 import logging
 import glob
+import threading
 from collections import OrderedDict
 
 # Import from utils package
@@ -32,6 +33,11 @@ class MediaManager:
         self.config = config
         self.thread_manager = thread_manager
         self.file_locator = FileLocator(config)
+
+        # Locks for thread safety
+        self._status_lock = threading.Lock()
+        self._queue_lock = threading.Lock()
+        self._progress_lock = threading.Lock()
 
         # Media status tracking
         self.media_status = {}
@@ -87,21 +93,22 @@ class MediaManager:
         Returns:
             bool: True if queued, False if already in queue or all media already exists
         """
-        if tomo_name in self.processing_queue:
-            return False
+        with self._queue_lock:
+            if tomo_name in self.processing_queue:
+                return False
 
-        # Skip queuing entirely when all output files are already on disk
-        if self._all_media_exists(tomo_name):
-            return False
+            # Skip queuing entirely when all output files are already on disk
+            if self._all_media_exists(tomo_name):
+                return False
 
-        # If priority, add to front, otherwise add to end
-        if priority:
-            # Create a new OrderedDict with this item first, then add all others
-            new_queue = OrderedDict([(tomo_name, True)])
-            new_queue.update(self.processing_queue)
-            self.processing_queue = new_queue
-        else:
-            self.processing_queue[tomo_name] = True
+            # If priority, add to front, otherwise add to end
+            if priority:
+                # Create a new OrderedDict with this item first, then add all others
+                new_queue = OrderedDict([(tomo_name, True)])
+                new_queue.update(self.processing_queue)
+                self.processing_queue = new_queue
+            else:
+                self.processing_queue[tomo_name] = True
 
         # Only process the queue immediately if we haven't been called from within process_queue
         # This avoids potential recursion issues
@@ -124,7 +131,8 @@ class MediaManager:
         started = 0
 
         # Process items in the queue order
-        queue_keys = list(self.processing_queue.keys())
+        with self._queue_lock:
+            queue_keys = list(self.processing_queue.keys())
 
         for tomo_name in queue_keys:
             # Start media generation
@@ -133,7 +141,9 @@ class MediaManager:
                 self._generate_media_for_tomogram_internal(tomo_name)
                 started += 1
                 # Remove from queue once processed
-                del self.processing_queue[tomo_name]
+                with self._queue_lock:
+                    if tomo_name in self.processing_queue:
+                        del self.processing_queue[tomo_name]
             else:
                 # Leave the rest in the queue for next time
                 break
@@ -150,7 +160,8 @@ class MediaManager:
             tomo_list (list): List of tomogram names to process
         """
         # Update total count for tracking
-        self.thumbnail_progress['total'] = len(tomo_list)
+        with self._progress_lock:
+            self.thumbnail_progress['total'] = len(tomo_list)
 
         # Queue each tomogram in order
         for tomo_name in tomo_list:
@@ -224,7 +235,8 @@ class MediaManager:
 
         if not os.path.exists(output_file) and self.config.paths['lowmag_path']:
             # Set status to generating
-            self.media_status[f"lowmag_{tomo_name}"] = "generating"
+            with self._status_lock:
+                self.media_status[f"lowmag_{tomo_name}"] = "generating"
 
             # Submit lowmag generation task
             self.thread_manager.submit_task(
@@ -246,7 +258,8 @@ class MediaManager:
 
         if not os.path.exists(output_file) and self.config.paths['tiltseries_path']:
             # Set status to generating
-            self.media_status[f"tiltseries_{tomo_name}"] = "generating"
+            with self._status_lock:
+                self.media_status[f"tiltseries_{tomo_name}"] = "generating"
 
             # Submit tilt series generation task
             self.thread_manager.submit_task(
@@ -268,7 +281,8 @@ class MediaManager:
 
         if not os.path.exists(output_file) and self.config.paths['tomogram_path']:
             # Set status to generating
-            self.media_status[f"tomogram_{tomo_name}"] = "generating"
+            with self._status_lock:
+                self.media_status[f"tomogram_{tomo_name}"] = "generating"
 
             # Submit tomogram generation task
             self.thread_manager.submit_task(
@@ -294,13 +308,15 @@ class MediaManager:
             # Verify source file exists
             if not source_file or not os.path.exists(source_file):
                 logger.error(f"Source file not found for thumbnail generation: {source_file}")
-                self.thumbnail_progress['status'] = 'error'
-                self.thumbnail_progress['message'] = f'Source file not found for {tomo_name}'
+                with self._progress_lock:
+                    self.thumbnail_progress['status'] = 'error'
+                    self.thumbnail_progress['message'] = f'Source file not found for {tomo_name}'
                 return False
 
             # Update progress tracking
-            self.thumbnail_progress['status'] = 'generating'
-            self.thumbnail_progress['message'] = f'Generating thumbnail for {tomo_name}'
+            with self._progress_lock:
+                self.thumbnail_progress['status'] = 'generating'
+                self.thumbnail_progress['message'] = f'Generating thumbnail for {tomo_name}'
 
             # Use utils.py function to generate the thumbnail
             from tomcat.utils import generate_jpeg_thumbnail
@@ -310,28 +326,32 @@ class MediaManager:
                 # Verify the thumbnail was actually created
                 if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                     # Update progress tracking
-                    self.thumbnail_progress['status'] = 'success'
-                    self.thumbnail_progress['message'] = f'Generated thumbnail for {tomo_name}'
-                    self.thumbnail_progress['completed_names'].append(tomo_name)
-                    self.thumbnail_progress['thumbnail_paths'][tomo_name] = os.path.basename(output_file)
-                    # Update downloaded count
-                    self.thumbnail_progress['downloaded'] += 1
+                    with self._progress_lock:
+                        self.thumbnail_progress['status'] = 'success'
+                        self.thumbnail_progress['message'] = f'Generated thumbnail for {tomo_name}'
+                        self.thumbnail_progress['completed_names'].append(tomo_name)
+                        self.thumbnail_progress['thumbnail_paths'][tomo_name] = os.path.basename(output_file)
+                        # Update downloaded count
+                        self.thumbnail_progress['downloaded'] += 1
                     return True
                 else:
                     # File wasn't created or is empty
-                    self.thumbnail_progress['status'] = 'error'
-                    self.thumbnail_progress['message'] = f'Generated thumbnail is invalid for {tomo_name}'
+                    with self._progress_lock:
+                        self.thumbnail_progress['status'] = 'error'
+                        self.thumbnail_progress['message'] = f'Generated thumbnail is invalid for {tomo_name}'
                     return False
             else:
                 # Function returned failure
-                self.thumbnail_progress['status'] = 'error'
-                self.thumbnail_progress['message'] = f'Failed to generate thumbnail for {tomo_name}'
+                with self._progress_lock:
+                    self.thumbnail_progress['status'] = 'error'
+                    self.thumbnail_progress['message'] = f'Failed to generate thumbnail for {tomo_name}'
                 return False
 
         except Exception as e:
             logger.error(f"Error generating thumbnail for {tomo_name}: {str(e)}")
-            self.thumbnail_progress['status'] = 'error'
-            self.thumbnail_progress['message'] = f'Error: {str(e)}'
+            with self._progress_lock:
+                self.thumbnail_progress['status'] = 'error'
+                self.thumbnail_progress['message'] = f'Error: {str(e)}'
             return False
 
     def _generate_lowmag_image(self, tomo_name):
@@ -352,7 +372,8 @@ class MediaManager:
 
             if not lowmag_file:
                 logger.error(f"No lowmag file found for {tomo_name}")
-                self.media_status[f"lowmag_{tomo_name}"] = "error"
+                with self._status_lock:
+                    self.media_status[f"lowmag_{tomo_name}"] = "error"
                 return False
 
             # Make sure output directory exists
@@ -364,11 +385,13 @@ class MediaManager:
 
             if success and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                 logger.info(f"Successfully generated lowmag image for {tomo_name}")
-                self.media_status[f"lowmag_{tomo_name}"] = "ready"
+                with self._status_lock:
+                    self.media_status[f"lowmag_{tomo_name}"] = "ready"
                 return True
             else:
                 logger.error(f"Failed to generate lowmag image for {tomo_name}")
-                self.media_status[f"lowmag_{tomo_name}"] = "error"
+                with self._status_lock:
+                    self.media_status[f"lowmag_{tomo_name}"] = "error"
                 # Clean up empty file if it exists
                 if os.path.exists(output_file) and os.path.getsize(output_file) == 0:
                     os.remove(output_file)
@@ -376,7 +399,8 @@ class MediaManager:
 
         except Exception as e:
             logger.error(f"Error generating lowmag image for {tomo_name}: {str(e)}")
-            self.media_status[f"lowmag_{tomo_name}"] = "error"
+            with self._status_lock:
+                self.media_status[f"lowmag_{tomo_name}"] = "error"
             # Clean up output file if it exists but generation failed
             if os.path.exists(output_file):
                 os.remove(output_file)
@@ -400,7 +424,8 @@ class MediaManager:
 
             if not tiltseries_file:
                 logger.error(f"No tilt series file found for {tomo_name}")
-                self.media_status[f"tiltseries_{tomo_name}"] = "error"
+                with self._status_lock:
+                    self.media_status[f"tiltseries_{tomo_name}"] = "error"
                 return False
 
             logger.info(f"Found tilt series file for {tomo_name}: {tiltseries_file}")
@@ -418,7 +443,8 @@ class MediaManager:
             if success and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                 logger.info(
                     f"Successfully generated tilt series animation for {tomo_name}, size: {os.path.getsize(output_file)} bytes")
-                self.media_status[f"tiltseries_{tomo_name}"] = "ready"
+                with self._status_lock:
+                    self.media_status[f"tiltseries_{tomo_name}"] = "ready"
                 return True
             else:
                 if os.path.exists(output_file):
@@ -428,12 +454,14 @@ class MediaManager:
                     os.remove(output_file)
                 else:
                     logger.error(f"Failed to generate file: {output_file}")
-                self.media_status[f"tiltseries_{tomo_name}"] = "error"
+                with self._status_lock:
+                    self.media_status[f"tiltseries_{tomo_name}"] = "error"
                 return False
 
         except Exception as e:
             logger.error(f"Error generating tilt series animation for {tomo_name}: {str(e)}")
-            self.media_status[f"tiltseries_{tomo_name}"] = "error"
+            with self._status_lock:
+                self.media_status[f"tiltseries_{tomo_name}"] = "error"
             # Clean up output file if it exists but generation failed
             if os.path.exists(output_file):
                 os.remove(output_file)
@@ -457,7 +485,8 @@ class MediaManager:
 
             if not tomogram_file:
                 logger.error(f"No tomogram file found for {tomo_name}")
-                self.media_status[f"tomogram_{tomo_name}"] = "error"
+                with self._status_lock:
+                    self.media_status[f"tomogram_{tomo_name}"] = "error"
                 return False
 
             logger.info(f"Found tomogram file for {tomo_name}: {tomogram_file}")
@@ -475,7 +504,8 @@ class MediaManager:
             if success and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                 logger.info(
                     f"Successfully generated tomogram animation for {tomo_name}, size: {os.path.getsize(output_file)} bytes")
-                self.media_status[f"tomogram_{tomo_name}"] = "ready"
+                with self._status_lock:
+                    self.media_status[f"tomogram_{tomo_name}"] = "ready"
                 return True
             else:
                 if os.path.exists(output_file):
@@ -485,12 +515,14 @@ class MediaManager:
                     os.remove(output_file)
                 else:
                     logger.error(f"Failed to generate file: {output_file}")
-                self.media_status[f"tomogram_{tomo_name}"] = "error"
+                with self._status_lock:
+                    self.media_status[f"tomogram_{tomo_name}"] = "error"
                 return False
 
         except Exception as e:
             logger.error(f"Error generating tomogram animation for {tomo_name}: {str(e)}")
-            self.media_status[f"tomogram_{tomo_name}"] = "error"
+            with self._status_lock:
+                self.media_status[f"tomogram_{tomo_name}"] = "error"
             # Clean up output file if it exists but generation failed
             if os.path.exists(output_file):
                 os.remove(output_file)
@@ -528,7 +560,8 @@ class MediaManager:
         # immediately and cache the result so subsequent polls skip disk I/O.
         if os.path.exists(media_file) and os.path.getsize(media_file) > 0:
             logger.debug(f"Media file is ready: {media_file}")
-            self.media_status[status_key] = "ready"
+            with self._status_lock:
+                self.media_status[status_key] = "ready"
             return {
                 "status": "ready",
                 "reload": False,
@@ -536,7 +569,9 @@ class MediaManager:
             }
 
         # Fast path: if already tracked as generating or error, return without queuing (D-05).
-        status = self.media_status.get(status_key, "unknown")
+        with self._status_lock:
+            status = self.media_status.get(status_key, "unknown")
+        
         if status in ("generating", "error"):
             return {
                 "status": status,
@@ -548,7 +583,8 @@ class MediaManager:
         # Status is unknown and file does not exist — queue for generation (D-05).
         # Set status before returning so the next poll sees "generating", not "unknown".
         self.queue_tomogram_for_processing(tomo_name, priority=True)
-        self.media_status[status_key] = "generating"
+        with self._status_lock:
+            self.media_status[status_key] = "generating"
         return {
             "status": "generating",
             "reload": False,
@@ -567,9 +603,10 @@ class MediaManager:
             str or None: Path to the thumbnail if found, None otherwise
         """
         # Check cached paths first
-        if tomo_name in self.thumbnail_progress['thumbnail_paths']:
-            thumbnail_filename = self.thumbnail_progress['thumbnail_paths'][tomo_name]
-            return os.path.join(self.config.thumbnails_folder, thumbnail_filename)
+        with self._progress_lock:
+            if tomo_name in self.thumbnail_progress['thumbnail_paths']:
+                thumbnail_filename = self.thumbnail_progress['thumbnail_paths'][tomo_name]
+                return os.path.join(self.config.thumbnails_folder, thumbnail_filename)
 
         # Use file locator to find thumbnail
         thumbnail_path = self.file_locator.find_thumbnail(tomo_name, self.config.thumbnails_folder)
@@ -587,4 +624,6 @@ class MediaManager:
         Returns:
             dict: Thumbnail generation progress information
         """
-        return self.thumbnail_progress
+        with self._progress_lock:
+            # Return a copy to avoid external mutation or RuntimeError if mutated during iteration
+            return self.thumbnail_progress.copy()
