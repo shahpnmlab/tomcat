@@ -11,7 +11,7 @@
 - [x] **Phase 1: Media Cache Fix** — Correct cache-check logic in MediaManager so already-generated media is never re-queued (completed 2026-04-02)
 - [x] **Phase 2: Thumbnail Pagination** — Add page navigation controls to the thumbnail view, matching tabulated view behaviour (completed 2026-04-02)
 - [x] **Phase 3: File Deduplication** — Strip `_preali` suffix in FileLocator so `_preali.mrc` files do not create duplicate catalogue entries (completed 2026-04-03)
-- [ ] **Phase 4: Thread Safety & Security** — Add locks to MediaManager and ThreadManager; fix Zip Slip vulnerability in archive import
+- [x] **Phase 4: Thread Safety & Security** — Add locks to MediaManager and ThreadManager; fix Zip Slip vulnerability in archive import (completed 2026-04-03)
 
 ---
 
@@ -74,14 +74,14 @@ Plans:
 **Success criteria:**
 - [ ] Running concurrent media generation requests (e.g., rapidly loading the catalogue page multiple times) does not produce a `RuntimeError: dictionary changed size during iteration` or silent key clobber (verified by log inspection or manual stress test)
 - [ ] `ThreadManager.submit_task()` never submits a duplicate job for the same `task_key` even when called from two threads simultaneously
-- [ ] Importing a `.tomcat` archive containing a member path such as `../../etc/passwd` causes the import to abort with a visible error message and writes no files outside `.tomcat/uploads/`
-- [ ] A valid `.tomcat` archive imports successfully after the security check is in place (no regression)
-**Plans:** 3 plans
+- [x] Importing a `.tomcat` archive containing a member path such as `../../etc/passwd` causes the import to abort with a visible error message and writes no files outside `.tomcat/uploads/`
+- [x] A valid `.tomcat` archive imports successfully after the security check is in place (no regression)
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 04-01-PLAN.md — Create test scaffolds for thread safety and security (Wave 0)
-- [ ] 04-02-PLAN.md — Implement locks in MediaManager and ThreadManager (Wave 1)
-- [ ] 04-03-PLAN.md — Implement Zip Slip protection in import_archive (Wave 1)
+- [x] 04-01-PLAN.md — Create test scaffolds for thread safety and security (Wave 0)
+- [x] 04-02-PLAN.md — Implement locks in MediaManager and ThreadManager (Wave 1)
+- [x] 04-03-PLAN.md — Implement Zip Slip protection in import_archive (Wave 1)
 
 ---
 
@@ -119,7 +119,7 @@ Recommended execution order: 1 → 2 → 3 → 4 (sequential for reviewer clarit
 | 1. Media Cache Fix | 1/1 | Complete | 2026-04-02 |
 | 2. Thumbnail Pagination | 1/1 | Complete | 2026-04-02 |
 | 3. File Deduplication | 1/1 | Complete | 2026-04-03 |
-| 4. Thread Safety & Security | 0/3 | Not started | - |
+| 4. Thread Safety & Security | 3/3 | Complete | 2026-04-03 |
 
 ---
 

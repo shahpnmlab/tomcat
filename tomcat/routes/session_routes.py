@@ -23,6 +23,20 @@ logger = logging.getLogger(__name__)
 session_bp = Blueprint('session', __name__)
 
 
+def _is_safe_path(basedir, path, follow_symlinks=True):
+    # Always resolve both paths to handle macOS /private/var vs /var etc.
+    basedir_real = os.path.realpath(basedir)
+    if follow_symlinks:
+        matchpath = os.path.realpath(path)
+    else:
+        # Resolve the parent directory of the path but keep the filename component
+        # to avoid resolving a symlink if follow_symlinks is False
+        parent_real = os.path.realpath(os.path.dirname(path))
+        matchpath = os.path.join(parent_real, os.path.basename(path))
+    
+    return os.path.commonpath((basedir_real, matchpath)) == basedir_real
+
+
 def initialize_routes(config, session_manager_instance, file_locator_instance, media_manager_instance, allowed_file_func, thread_manager_instance):
     """
     Initialize session routes with required dependencies.
@@ -566,23 +580,37 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
 
                 # Extract the archive
                 with tarfile.open(archive_path, "r:gz") as tar:
-                    # First, find the session file
+                    # Security check: validate all members before extraction
                     for member in tar.getmembers():
+                        # Determine intended extraction path
+                        target_path = os.path.join(temp_dir, member.name)
+                        
+                        # Zip Slip / Traversal check
+                        if not _is_safe_path(temp_dir, target_path, follow_symlinks=False):
+                            flash(f"Security error: Illegal member name '{member.name}'")
+                            return redirect(url_for('session.upload_file'))
+                        
+                        # Symlink traversal check: ensure symlinks don't point outside temp_dir
+                        if member.issym() or member.islnk():
+                            # For symlinks, we need to check where they point
+                            link_target = os.path.join(os.path.dirname(target_path), member.linkname)
+                            if not _is_safe_path(temp_dir, link_target, follow_symlinks=False):
+                                flash(f"Security error: Illegal symlink '{member.name}' -> '{member.linkname}'")
+                                return redirect(url_for('session.upload_file'))
+
                         if member.name.endswith('.csv'):
                             session_filename = os.path.basename(member.name)
-                            break
 
                     if not session_filename:
                         flash('No valid session file found in the archive')
                         return redirect(url_for('session.upload_file'))
 
-                    # Extract all files
+                    # Extract all files safely now that we've validated them
                     tar.extractall(path=temp_dir)
 
                 # Copy session file to upload folder
                 session_path = os.path.join(temp_dir, session_filename)
                 if os.path.exists(session_path):
-                    import shutil
                     shutil.copy2(session_path, os.path.join(config.upload_folder, session_filename))
 
                 # Create necessary directories if they don't exist
@@ -598,7 +626,6 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
                         src = os.path.join(thumbnails_dir, file)
                         dst = os.path.join(config.thumbnails_folder, file)
                         if os.path.isfile(src):
-                            import shutil
                             shutil.copy2(src, dst)
 
                 # Copy lowmag images
@@ -608,7 +635,6 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
                         src = os.path.join(lowmag_dir, file)
                         dst = os.path.join(config.lowmag_folder, file)
                         if os.path.isfile(src):
-                            import shutil
                             shutil.copy2(src, dst)
 
                 # Copy tilt series
@@ -618,7 +644,6 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
                         src = os.path.join(tiltseries_dir, file)
                         dst = os.path.join(config.tiltseries_folder, file)
                         if os.path.isfile(src):
-                            import shutil
                             shutil.copy2(src, dst)
 
                 # Copy tomograms
@@ -628,7 +653,6 @@ def initialize_routes(config, session_manager_instance, file_locator_instance, m
                         src = os.path.join(tomogram_dir, file)
                         dst = os.path.join(config.tomogram_folder, file)
                         if os.path.isfile(src):
-                            import shutil
                             shutil.copy2(src, dst)
 
                 flash(f"Successfully imported session from archive: {session_filename}")
