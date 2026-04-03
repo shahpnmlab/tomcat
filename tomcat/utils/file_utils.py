@@ -28,7 +28,7 @@ def extract_basename(filename):
 
     # Define suffixes to remove in order of specificity
     tomogram_suffixes = ['_rec.mrc', '_rec', '.rec.mrc', '.rec', '.mrc']
-    tiltseries_suffixes = ['_ali.mrc', '_ali', '.ali.mrc', '.ali', '.st', '.st.mrc']
+    tiltseries_suffixes = ['_preali.mrc', '_preali', '_ali.mrc', '_ali', '.ali.mrc', '.ali', '.st', '.st.mrc']
     lowmag_suffixes = ['.dm4', '.tif', '.tiff', '.jpg', '.jpeg', '.png']
 
     # Combine all suffixes
@@ -42,6 +42,7 @@ def extract_basename(filename):
 
     # Remove common processing parameters using regex
     patterns = [
+        r'_preali',
         r'_rec',
         r'_ali',
         r'_bin\d+$',  # Remove binning info (e.g., _bin8)
