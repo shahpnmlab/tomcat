@@ -6,6 +6,7 @@ including a thread pool implementation for efficient concurrent processing.
 """
 import logging
 import atexit
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class ThreadManager:
         self.max_workers = max_workers
         self.thread_pool = ThreadPoolExecutor(max_workers=max_workers)
         self.active_futures = {}
+        self._submit_lock = threading.Lock()
 
         # Register shutdown function
         atexit.register(self._shutdown)
@@ -46,14 +48,15 @@ class ThreadManager:
         Returns:
             bool: True if task was submitted, False if already running
         """
-        # Check if task is already running
-        if task_key in self.active_futures and not self.active_futures[task_key].done():
-            logger.debug(f"Task {task_key} is already running")
-            return False
+        with self._submit_lock:
+            # Check if task is already running
+            if task_key in self.active_futures and not self.active_futures[task_key].done():
+                logger.debug(f"Task {task_key} is already running")
+                return False
 
-        # Submit the task to the thread pool
-        future = self.thread_pool.submit(func, *args, **kwargs)
-        self.active_futures[task_key] = future
+            # Submit the task to the thread pool
+            future = self.thread_pool.submit(func, *args, **kwargs)
+            self.active_futures[task_key] = future
 
         logger.debug(f"Submitted task: {task_key}")
         return True
@@ -65,24 +68,25 @@ class ThreadManager:
         Returns:
             int: Number of tasks cleaned up
         """
-        # Create a copy of keys to avoid modification during iteration
-        keys = list(self.active_futures.keys())
-        cleaned_count = 0
+        with self._submit_lock:
+            # Create a copy of keys to avoid modification during iteration
+            keys = list(self.active_futures.keys())
+            cleaned_count = 0
 
-        for key in keys:
-            future = self.active_futures[key]
-            if future.done():
-                # Handle any exceptions to prevent them from being silently dropped
-                try:
-                    # Get the result to ensure any exceptions are raised and logged
-                    result = future.result()
-                    logger.debug(f"Task {key} completed successfully")
-                except Exception as e:
-                    logger.error(f"Error in background task {key}: {str(e)}")
+            for key in keys:
+                future = self.active_futures[key]
+                if future.done():
+                    # Handle any exceptions to prevent them from being silently dropped
+                    try:
+                        # Get the result to ensure any exceptions are raised and logged
+                        result = future.result()
+                        logger.debug(f"Task {key} completed successfully")
+                    except Exception as e:
+                        logger.error(f"Error in background task {key}: {str(e)}")
 
-                # Remove the future from tracking
-                del self.active_futures[key]
-                cleaned_count += 1
+                    # Remove the future from tracking
+                    del self.active_futures[key]
+                    cleaned_count += 1
 
         if cleaned_count > 0:
             logger.debug(f"Cleaned up {cleaned_count} completed tasks")
@@ -97,7 +101,8 @@ class ThreadManager:
             int: Number of active tasks
         """
         self.cleanup_completed_tasks()
-        return len(self.active_futures)
+        with self._submit_lock:
+            return len(self.active_futures)
 
     def _shutdown(self):
         """
