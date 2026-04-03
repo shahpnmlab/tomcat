@@ -21,14 +21,16 @@ Tomograms load from cache reliably, the catalogue is free of duplicates, and the
 - ✓ File priority resolution for tomogram/tilt/lowmag types — existing
 - ✓ Settings UI for configuring data directory paths — existing
 - ✓ Session import/export via `.tomcat` archive files — existing
+- ✓ **BUG-01**: GIF/thumbnail cache is checked before re-queuing — media not regenerated when files already exist on disk (Validated in Phase 01: media-cache-fix)
+- ✓ **BUG-02**: Thumbnail view has page navigation matching tabulated view (Validated in Phase 02: thumbnail-pagination)
+- ✓ **BUG-03**: `_preali.mrc` files do not create duplicate catalogue entries; used as fallback when `.ali` file absent (Validated in Phase 03: file-deduplication)
+- ✓ **BUG-04**: `MediaManager` dict mutations are thread-safe (locks around `processing_queue`, `thumbnail_progress`, `media_status`) (Validated in Phase 04: thread-safety-security)
+- ✓ **BUG-05**: Archive import validates extracted paths against target directory (no Zip Slip) (Validated in Phase 04: thread-safety-security)
 
 ### Active
 
-- [x] **BUG-01**: GIF/thumbnail cache is checked before re-queuing — media not regenerated when files already exist on disk (Validated in Phase 01: media-cache-fix)
-- [ ] **BUG-02**: Thumbnail view has page navigation matching tabulated view
-- [x] **BUG-03**: `_preali.mrc` files do not create duplicate catalogue entries; used as fallback when `.ali` file absent (Validated in Phase 03: file-deduplication)
-- [ ] **BUG-04**: `MediaManager` dict mutations are thread-safe (locks around `processing_queue`, `thumbnail_progress`, `media_status`)
-- [ ] **BUG-05**: Archive import validates extracted paths against target directory (no Zip Slip)
+- (None)
+
 
 ### Out of Scope
 
